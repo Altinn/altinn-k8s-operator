@@ -52,17 +52,20 @@ var _ = Describe("MaskinportenClient Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &MaskinportenClientReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := NewMaskinportenClientReconciler(
+				k8sClient,
+				k8sClient.Scheme(),
+			)
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
+			Expect(err).To(HaveOccurred())
+
+			resource := &resourcesv1alpha1.MaskinportenClient{}
+			err = k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			Expect(resource.Status.State).To(Equal("error"))
 		})
 	})
 })

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sync"
 
+	"altinn.studio/altinn-k8s-operator/internal/config"
 	"github.com/google/uuid"
+	"github.com/jonboulle/clockwork"
 )
 
 type ClientUpsertRequest struct {
@@ -18,17 +20,23 @@ type ClientManager interface {
 }
 
 type clientManager struct {
-	mutex   sync.Mutex
-	clients map[string]*ClientInfo
+	mutex      sync.Mutex
+	clients    map[string]*ClientInfo
+	httpClient *httpApiClient
 }
 
 var _ ClientManager = (*clientManager)(nil)
 
-func NewClientManager() ClientManager {
-	return &clientManager{
-		mutex:   sync.Mutex{},
-		clients: make(map[string]*ClientInfo),
+func NewClientManager(config *config.MaskinportenApiConfig, clock clockwork.Clock) (ClientManager, error) {
+	httpClient, err := newApiClient(config, clock)
+	if err != nil {
+		return nil, err
 	}
+	return &clientManager{
+		mutex:      sync.Mutex{},
+		clients:    make(map[string]*ClientInfo),
+		httpClient: httpClient,
+	}, nil
 }
 
 func (s *clientManager) Get(appId string) (*ClientInfo, error) {
