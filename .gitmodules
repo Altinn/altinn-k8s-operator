@@ -1,0 +1,4 @@
+[submodule "test/app/altinn-studio-charts"]
+	path = test/app/altinn-studio-charts
+	url = git@github.com:Altinn/altinn-studio-charts.git
+	branch = feature/maskinporten-integration

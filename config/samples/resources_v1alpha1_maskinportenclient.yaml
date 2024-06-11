@@ -5,5 +5,4 @@ metadata:
     app: local-testapp-deployment
   name: local-testapp
 spec:
-  appId: 'testapp'
   scopes: ['test-scope']

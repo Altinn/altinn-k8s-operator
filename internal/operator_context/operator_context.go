@@ -14,7 +14,7 @@ func (c *Context) IsLocal() bool {
 func Discover() (*Context, error) {
 	// This should come from the environment/context somewhere
 	// there should be 1:1 mapping between TE/env:cluster
-	te := "ttd"
+	te := "local"
 	env := EnvLocal
 
 	return &Context{Te: te, Env: env}, nil
