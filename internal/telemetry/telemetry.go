@@ -59,7 +59,7 @@ func ConfigureOtel(ctx context.Context) (shutdown func(context.Context) error, e
 	tracerProvider, err := newTraceProvider(ctx, res)
 	if err != nil {
 		handleErr(err)
-		return
+		return shutdown, err
 	}
 	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 	otel.SetTracerProvider(tracerProvider)
@@ -68,12 +68,12 @@ func ConfigureOtel(ctx context.Context) (shutdown func(context.Context) error, e
 	meterProvider, err := newMeterProvider(ctx, res)
 	if err != nil {
 		handleErr(err)
-		return
+		return shutdown, err
 	}
 	shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
 	otel.SetMeterProvider(meterProvider)
 
-	return
+	return shutdown, err
 }
 
 func WrapTransport(config *rest.Config) {
