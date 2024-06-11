@@ -2,11 +2,8 @@ apiVersion: resources.altinn.studio/v1alpha1
 kind: MaskinportenClient
 metadata:
   labels:
-    app.kubernetes.io/name: maskinportenclient
-    app.kubernetes.io/instance: maskinportenclient-sample
-    app.kubernetes.io/part-of: altinn-k8s-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: altinn-k8s-operator
-  name: maskinportenclient-sample
+    app: local-testapp-deployment
+  name: local-testapp
 spec:
-  # TODO(user): Add fields here
+  appId: 'testapp'
+  scopes: ['test-scope']

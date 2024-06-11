@@ -27,12 +27,28 @@ import (
 type MaskinportenClientSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Scopes is a list of Maskinporten scopes that the client should have access to
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 // MaskinportenClientStatus defines the observed state of MaskinportenClient
 type MaskinportenClientStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ClientId is the client id of the client posted to Maskinporten API
+	ClientId  string   `json:"clientId,omitempty"`
+	Authority string   `json:"authority,omitempty"`
+	KeyIds    []string `json:"keyIds,omitempty"`
+	// LastSynced is the timestamp of the last successful sync towards Maskinporten API
+	//
+	// +kubebuilder:validation:Format: date-time
+	LastSynced         *metav1.Time `json:"lastSynced,omitempty"`
+	State              string       `json:"state,omitempty"`
+	Reason             string       `json:"reason,omitempty"`
+	ObservedGeneration int64        `json:"observedGeneration,omitempty"`
+	LastActions        []string     `json:"lastActions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
