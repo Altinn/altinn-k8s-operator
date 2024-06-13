@@ -197,7 +197,7 @@ func (r *MaskinportenClientReconciler) updateStatusWithError(
 	msg string,
 	instance *resourcesv1alpha1.MaskinportenClient,
 	actions reconciliationActionList,
-) error {
+) {
 	origSpan := trace.SpanFromContext(ctx)
 	log := log.FromContext(ctx)
 	log.Error(origError, "Reconciliation of MaskinportenClient failed", "failure", msg)
@@ -205,7 +205,7 @@ func (r *MaskinportenClientReconciler) updateStatusWithError(
 	origSpan.SetStatus(codes.Error, msg)
 	origSpan.RecordError(origError)
 
-	return r.updateStatus(ctx, nil, instance, "error", msg, actions)
+	_ = r.updateStatus(ctx, nil, instance, "error", msg, actions)
 }
 
 func (r *MaskinportenClientReconciler) getInstance(

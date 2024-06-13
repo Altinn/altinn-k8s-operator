@@ -159,7 +159,7 @@ func (c *httpApiClient) accessTokenFetcher(ctx context.Context) (*tokenResponse,
 	}
 
 	if resp.StatusCode != 200 {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
@@ -195,7 +195,7 @@ func (c *httpApiClient) wellKnownFetcher(ctx context.Context) (*wellKnownRespons
 	}
 
 	if resp.StatusCode != 200 {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
@@ -207,7 +207,7 @@ func (c *httpApiClient) wellKnownFetcher(ctx context.Context) (*wellKnownRespons
 }
 
 func deserialize[T any](resp *http.Response) (T, error) {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result T
 	err := json.NewDecoder(resp.Body).Decode(&result)

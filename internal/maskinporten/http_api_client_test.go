@@ -97,7 +97,8 @@ func TestFetchAccessTokenWithHTTPTest(t *testing.T) {
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"access_token":"mock_access_token","token_type":"Bearer","expires_in":3600}`))
+		_, err := w.Write([]byte(`{"access_token":"mock_access_token","token_type":"Bearer","expires_in":3600}`))
+		g.Expect(err).NotTo(HaveOccurred())
 	}))
 	defer server.Close()
 

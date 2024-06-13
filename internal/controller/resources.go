@@ -23,7 +23,7 @@ func (k maskinportenResourceKind) String() string {
 	if s, ok := resourceKindToString[k]; ok {
 		return s
 	}
-	return "Unknown"
+	return UnkownStr
 }
 
 type maskinportenResource interface {
@@ -73,7 +73,7 @@ func (k reconciliationActionKind) String() string {
 	if s, ok := actionKindToString[k]; ok {
 		return s
 	}
-	return "Unknown"
+	return UnkownStr
 }
 
 type reconciliationAction struct {
@@ -88,7 +88,7 @@ func (a *reconciliationAction) String() string {
 type reconciliationActionList []*reconciliationAction
 
 func (l *reconciliationActionList) Strings() []string {
-	var res []string
+	res := make([]string, len(*l))
 	for _, a := range *l {
 		res = append(res, a.String())
 	}

@@ -27,7 +27,7 @@ func (k requestKind) String() string {
 	if s, ok := requestKindToString[k]; ok {
 		return s
 	}
-	return "Unknown"
+	return UnkownStr
 }
 
 type maskinportenClientRequest struct {
