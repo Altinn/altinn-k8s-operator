@@ -9,4 +9,4 @@ See [/CONTRIBUTING.md](/CONTRIBUTING.md).
 
 ## Architecture
 
-![Architecture diagram](/docs/maskinporten.drawio.svg)
+[Architecture diagram](/docs/maskinporten.drawio.svg)
