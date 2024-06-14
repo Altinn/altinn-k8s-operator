@@ -6,3 +6,7 @@ Operators are implemented using Go and Kubebuilder.
 ## Contributing
 
 See [/CONTRIBUTING.md](/CONTRIBUTING.md).
+
+## Architecture
+
+![Architecture diagram](/docs/maskinporten.drawio.svg)
