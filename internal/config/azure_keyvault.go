@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	operatorcontext "altinn.studio/altinn-k8s-operator/internal/operator_context"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
+	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
 )
 
 func loadFromAzureKeyVault(operatorContext *operatorcontext.Context) (*Config, error) {
