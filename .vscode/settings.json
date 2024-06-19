@@ -13,5 +13,9 @@
     "go.lintTool": "golangci-lint",
     "go.lintFlags": [
         "--issues-exit-code=0"
+    ],
+    "cSpell.words": [
+      "golines",
+      "segmentio"
     ]
 }
