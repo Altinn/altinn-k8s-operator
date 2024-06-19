@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"altinn.studio/altinn-k8s-operator/test/utils"
+	"github.com/altinn/altinn-k8s-operator/test/utils"
 )
 
 const namespace = "altinn-k8s-operator-system"

@@ -1,4 +1,4 @@
-module altinn.studio/altinn-k8s-operator
+module github.com/altinn/altinn-k8s-operator
 
 go 1.21
 

@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 
-	"altinn.studio/altinn-k8s-operator/internal/maskinporten"
+	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	corev1 "k8s.io/api/core/v1"
 )
 

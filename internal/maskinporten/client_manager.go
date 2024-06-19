@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"altinn.studio/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/config"
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 )
