@@ -2,7 +2,7 @@
     "go.formatTool": "custom",
     "go.alternateTools": {
         "customFormatter": "golines",
-        "golangci-lint": "${workspaceFolder}/bin/golangci-lint-v1.54.2"
+        "golangci-lint": "${workspaceFolder}/bin/golangci-lint-v1.57.2"
     },
     "go.formatFlags": [
         "-m",

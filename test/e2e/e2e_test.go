@@ -13,6 +13,8 @@ import (
 
 const namespace = "altinn-k8s-operator-system"
 
+// TODO: create e2e environment matching app clusters
+
 var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
 		By("installing prometheus operator")

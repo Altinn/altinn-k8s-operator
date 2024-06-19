@@ -19,7 +19,7 @@ Feel free to query existing issues before creating a new one.
 ### Local development
 
 #### Prerequisites
-- go version v1.21.0+
+- go version v1.22.0+
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
@@ -31,8 +31,8 @@ Feel free to query existing issues before creating a new one.
 make docker-build docker-push IMG=<some-registry>/altinn-k8s-operator:tag
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified. 
-And it is required to have access to pull the image from the working environment. 
+**NOTE:** This image ought to be published in the personal registry you specified.
+And it is required to have access to pull the image from the working environment.
 Make sure you have the proper permission to the registry if the above commands don’t work.
 
 **Install the CRDs into the cluster:**
@@ -47,7 +47,7 @@ make install
 make deploy IMG=<some-registry>/altinn-k8s-operator:tag
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin 
+> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
 
 **Create instances of your solution**
@@ -78,7 +78,7 @@ make uninstall
 make undeploy
 ```
 
-### Project Distribution
+## Project Distribution
 
 Following are the steps to build the installer and distribute this project to users.
 
@@ -104,3 +104,26 @@ kubectl apply -f https://raw.githubusercontent.com/<org>/altinn-k8s-operator/<ta
 ### Contributing
 
 // TODO: doc
+
+
+### Upgrading
+
+If kubebuilder bumps major version, in some cases there is not much to do. Still, it might be worth it to
+
+* Upgrade kubebuilder CLI
+* Scaffold a new project
+* Generate some CRD that we use
+* Inspect diff with this repo
+* Case-insensitive search for `version` to make sure hardcoded versions are up to date
+* Run all builds, tests, lints etc.. 
+
+That way we don't get stuck on old versions of the scaffold forever..
+Example for v3 -> v4 upgrade of CLI:
+
+```sh
+mkdir altinn-k8s-operator2
+cd altinn-k8s-operator2
+kubebuilder init --plugins go/v4 --domain altinn.studio --owner "Altinn" --repo "github.com/Altinn/altinn-k8s-operator" --project-name "altinn-k8s-operator"
+kubebuilder create api --group resources --version v1alpha1 --kind MaskinportenClient
+make manifests
+```

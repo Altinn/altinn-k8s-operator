@@ -37,15 +37,15 @@ func TestWellKnownConfig(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(config2).NotTo(BeNil())
 	config3 := *config1
-	g.Expect(config1 == config2).To(BeTrue())   // Due to cache
-	g.Expect(config1 == &config3).To(BeFalse()) // Copied above
+	g.Expect(config1).To(BeIdenticalTo(config2))     // Due to cache
+	g.Expect(config1).ToNot(BeIdenticalTo(&config3)) // Copied above
 
 	clock.Advance((5 + 1) * time.Minute) // Advance the clock past cache expiration
 
 	config4, err := apiClient.getWellKnownConfiguration(ctx)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(config4).NotTo(BeNil())
-	g.Expect(config1 == config4).To(BeFalse()) // Due to cache expiration
+	g.Expect(config1).ToNot(BeIdenticalTo(config4)) // Due to cache expiration
 }
 
 func TestCreateGrant(t *testing.T) {
