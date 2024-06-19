@@ -1,12 +1,17 @@
 {
     "go.formatTool": "custom",
     "go.alternateTools": {
-        "customFormatter": "golines"
+        "customFormatter": "golines",
+        "golangci-lint": "${workspaceFolder}/bin/golangci-lint-v1.54.2"
     },
     "go.formatFlags": [
         "-m",
         "120",
         "-w",
         "--ignore-generated"
+    ],
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--issues-exit-code=0"
     ]
 }
