@@ -1,0 +1,11 @@
+{
+    "go.formatTool": "custom",
+    "go.alternateTools": {
+        "customFormatter": "golines"
+    },
+    "go.formatFlags": [
+        "-m",
+        "120",
+        "-w"
+    ]
+}
