@@ -6,6 +6,7 @@
     "go.formatFlags": [
         "-m",
         "120",
-        "-w"
+        "-w",
+        "--ignore-generated"
     ]
 }
