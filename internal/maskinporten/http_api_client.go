@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"time"
 
-	"altinn.studio/altinn-k8s-operator/internal/caching"
-	"altinn.studio/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/caching"
+	"github.com/altinn/altinn-k8s-operator/internal/config"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"

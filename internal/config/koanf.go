@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	operatorcontext "altinn.studio/altinn-k8s-operator/internal/operator_context"
+	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"

@@ -20,9 +20,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	resourcesv1alpha1 "altinn.studio/altinn-k8s-operator/api/v1alpha1"
-	"altinn.studio/altinn-k8s-operator/internal/controller"
-	"altinn.studio/altinn-k8s-operator/internal/telemetry"
+	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
+	"github.com/altinn/altinn-k8s-operator/internal/controller"
+	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	//+kubebuilder:scaffold:imports
 )
 

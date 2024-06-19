@@ -11,7 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	resourcesv1alpha1 "altinn.studio/altinn-k8s-operator/api/v1alpha1"
+	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 )
 
 var _ = Describe("MaskinportenClient Controller", func() {

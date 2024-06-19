@@ -19,10 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	resourcesv1alpha1 "altinn.studio/altinn-k8s-operator/api/v1alpha1"
-	"altinn.studio/altinn-k8s-operator/internal"
-	"altinn.studio/altinn-k8s-operator/internal/maskinporten"
-	rt "altinn.studio/altinn-k8s-operator/internal/runtime"
+	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
+	"github.com/altinn/altinn-k8s-operator/internal"
+	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
+	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
 )
 
 const JsonFileName = "maskinporten-client.json"

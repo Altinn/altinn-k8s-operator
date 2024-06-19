@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"altinn.studio/altinn-k8s-operator/internal/config"
-	"altinn.studio/altinn-k8s-operator/internal/maskinporten"
-	operatorcontext "altinn.studio/altinn-k8s-operator/internal/operator_context"
-	rt "altinn.studio/altinn-k8s-operator/internal/runtime"
+	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
+	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
 	"github.com/jonboulle/clockwork"
 )
 

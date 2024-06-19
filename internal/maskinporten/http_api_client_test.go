@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"altinn.studio/altinn-k8s-operator/internal/caching"
-	"altinn.studio/altinn-k8s-operator/internal/config"
-	operatorcontext "altinn.studio/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/caching"
+	"github.com/altinn/altinn-k8s-operator/internal/config"
+	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
 	"github.com/jonboulle/clockwork"
 	. "github.com/onsi/gomega"
 )
