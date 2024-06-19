@@ -35,8 +35,8 @@ type MaskinportenClientStatus struct {
 	LastActions        []string     `json:"lastActions,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // MaskinportenClient is the Schema for the maskinportenclients API
 type MaskinportenClient struct {
@@ -47,7 +47,7 @@ type MaskinportenClient struct {
 	Status MaskinportenClientStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // MaskinportenClientList contains a list of MaskinportenClient
 type MaskinportenClientList struct {
