@@ -1,7 +1,7 @@
 package config
 
 import (
-	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/go-playground/validator/v10"
 )
 

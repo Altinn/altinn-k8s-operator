@@ -3,7 +3,7 @@ package runtime
 import (
 	"github.com/altinn/altinn-k8s-operator/internal/config"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
-	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 )
 
 type Runtime interface {

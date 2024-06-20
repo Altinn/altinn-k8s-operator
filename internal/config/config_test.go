@@ -1,11 +1,12 @@
 package config
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"testing"
 
-	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/go-playground/validator/v10"
 	. "github.com/onsi/gomega"
 )
@@ -27,7 +28,7 @@ func TestConfigMissingValuesFail(t *testing.T) {
 	_, err = file.WriteString("maskinporten_api.url=https://example.com")
 	Expect(err).NotTo(HaveOccurred())
 
-	operatorContext := operatorcontext.DiscoverOrDie()
+	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
 	cfg, err := GetConfig(operatorContext, file.Name())
 	Expect(cfg).To(BeNil())
 	Expect(err).To(HaveOccurred())
@@ -40,7 +41,7 @@ func TestConfigMissingValuesFail(t *testing.T) {
 func TestConfigTestEnvLoadsOk(t *testing.T) {
 	RegisterTestingT(t)
 
-	operatorContext := operatorcontext.DiscoverOrDie()
+	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
 	cfg, err := GetConfig(operatorContext, "")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())

@@ -125,6 +125,7 @@ func main() {
 	}
 
 	if err = (controller.NewMaskinportenClientReconciler(
+		ctx,
 		mgr.GetClient(),
 		mgr.GetScheme(),
 	)).SetupWithManager(mgr); err != nil {
