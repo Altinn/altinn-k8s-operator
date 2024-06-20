@@ -82,6 +82,19 @@ func getMaskinportenApiWellKnownFixture(g *gomega.WithT, statusCode int) (*httpt
 	)
 }
 
+func TestFixtureIsNotRemote(t *testing.T) {
+	g := NewWithT(t)
+
+	operatorContext := operatorcontext.DiscoverOrDie()
+	configBefore := config.GetConfigOrDie(operatorContext, "")
+
+	server, configAfter := getMaskinportenApiWellKnownFixture(g, http.StatusOK)
+	defer server.Close()
+
+	g.Expect(configAfter.MaskinportenApi.Url).NotTo(Equal(configBefore.MaskinportenApi.Url))
+	g.Expect(configAfter.MaskinportenApi.Url).To(ContainSubstring("http://127.0.0.1"))
+}
+
 func TestWellKnownConfigOk(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
