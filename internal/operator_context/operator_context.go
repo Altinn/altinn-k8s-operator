@@ -19,3 +19,11 @@ func Discover() (*Context, error) {
 
 	return &Context{Te: te, Env: env}, nil
 }
+
+func DiscoverOrDie() *Context {
+	context, err := Discover()
+	if err != nil {
+		panic(err)
+	}
+	return context
+}

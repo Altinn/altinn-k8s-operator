@@ -16,11 +16,11 @@ type MaskinportenApiConfig struct {
 	Scope    string `koanf:"scope"     validate:"required"`
 }
 
-func GetConfig(operatorContext *operatorcontext.Context) (*Config, error) {
+func GetConfig(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
 	var cfg *Config
 	var err error
 	if operatorContext.IsLocal() {
-		cfg, err = loadFromKoanf(operatorContext)
+		cfg, err = loadFromKoanf(operatorContext, configFilePath)
 	} else {
 		cfg, err = loadFromAzureKeyVault(operatorContext)
 	}
@@ -38,4 +38,12 @@ func GetConfig(operatorContext *operatorcontext.Context) (*Config, error) {
 	// k.Print() // Uncomment to print the config, only for debug, there be secrets
 
 	return cfg, nil
+}
+
+func GetConfigOrDie(operatorContext *operatorcontext.Context, configFilePath string) *Config {
+	cfg, err := GetConfig(operatorContext, configFilePath)
+	if err != nil {
+		panic(err)
+	}
+	return cfg
 }
