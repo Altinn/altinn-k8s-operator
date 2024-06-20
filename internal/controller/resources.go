@@ -89,8 +89,8 @@ type reconciliationActionList []*reconciliationAction
 
 func (l *reconciliationActionList) Strings() []string {
 	res := make([]string, len(*l))
-	for _, a := range *l {
-		res = append(res, a.String())
+	for i, a := range *l {
+		res[i] = a.String()
 	}
 	return res
 }

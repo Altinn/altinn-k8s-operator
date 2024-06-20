@@ -9,6 +9,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
+	"go.opentelemetry.io/otel"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
+	"github.com/altinn/altinn-k8s-operator/internal"
 	"github.com/altinn/altinn-k8s-operator/internal/controller"
 	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	// +kubebuilder:scaffold:imports
@@ -65,10 +68,21 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	// Set up OpenTelemetry.
-	otelShutdown, err := telemetry.ConfigureOtel(ctx)
+	otelShutdown, err := telemetry.ConfigureOTel(ctx)
 	if err != nil {
-		return
+		setupLog.Error(err, "unable to configure OTel")
+		os.Exit(1)
 	}
+
+	ctx, span := otel.Tracer(telemetry.ServiceName).Start(ctx, "Main")
+
+	rt, err := internal.NewRuntime(ctx)
+	if err != nil {
+		setupLog.Error(err, "unable to initialize runtime")
+		span.End()
+		os.Exit(1)
+	}
+
 	// Handle shutdown properly so nothing leaks.
 	defer func() {
 		err = errors.Join(err, otelShutdown(context.Background()))
@@ -121,29 +135,35 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		span.End()
 		os.Exit(1)
 	}
 
 	if err = (controller.NewMaskinportenClientReconciler(
-		ctx,
+		rt,
 		mgr.GetClient(),
 		mgr.GetScheme(),
 	)).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MaskinportenClient")
+		span.End()
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
+		span.End()
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
+		span.End()
 		os.Exit(1)
 	}
 
 	setupLog.Info("starting manager")
+	span.End()
+
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

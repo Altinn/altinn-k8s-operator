@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
+	"github.com/altinn/altinn-k8s-operator/internal"
 )
 
 var _ = Describe("MaskinportenClient Controller", func() {
@@ -52,13 +53,15 @@ var _ = Describe("MaskinportenClient Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
+			rt, err := internal.NewRuntime(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 			controllerReconciler := NewMaskinportenClientReconciler(
-				context.Background(),
+				rt,
 				k8sClient,
 				k8sClient.Scheme(),
 			)
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).To(HaveOccurred())

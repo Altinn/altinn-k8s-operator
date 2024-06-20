@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -20,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
-	"github.com/altinn/altinn-k8s-operator/internal"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
 )
@@ -33,24 +31,17 @@ type MaskinportenClientReconciler struct {
 	client.Client
 	Scheme  *runtime.Scheme
 	runtime rt.Runtime
-	tracer  trace.Tracer
 }
 
 func NewMaskinportenClientReconciler(
-	ctx context.Context,
+	rt rt.Runtime,
 	client client.Client,
 	scheme *runtime.Scheme,
 ) *MaskinportenClientReconciler {
-	rt, err := internal.NewRuntime(ctx)
-	if err != nil {
-		panic(err)
-	}
-
 	return &MaskinportenClientReconciler{
 		Client:  client,
 		Scheme:  scheme,
 		runtime: rt,
-		tracer:  otel.Tracer("MaskinportenClientReconciler"),
 	}
 }
 
@@ -68,7 +59,7 @@ func NewMaskinportenClientReconciler(
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *MaskinportenClientReconciler) Reconcile(ctx context.Context, kreq ctrl.Request) (ctrl.Result, error) {
-	ctx, span := r.tracer.Start(
+	ctx, span := r.runtime.Tracer().Start(
 		ctx,
 		"Reconcile",
 		trace.WithAttributes(attribute.String("namespace", kreq.Namespace), attribute.String("name", kreq.Name)),
@@ -154,7 +145,7 @@ func (r *MaskinportenClientReconciler) updateStatus(
 	reason string,
 	actions reconciliationActionList,
 ) error {
-	ctx, span := r.tracer.Start(ctx, "Reconcile.updateStatus")
+	ctx, span := r.runtime.Tracer().Start(ctx, "Reconcile.updateStatus")
 	defer span.End()
 
 	log := log.FromContext(ctx)
@@ -216,7 +207,7 @@ func (r *MaskinportenClientReconciler) getInstance(
 	ctx context.Context,
 	req *maskinportenClientRequest,
 ) (*resourcesv1alpha1.MaskinportenClient, error) {
-	ctx, span := r.tracer.Start(ctx, "Reconcile.getInstance")
+	ctx, span := r.runtime.Tracer().Start(ctx, "Reconcile.getInstance")
 	defer span.End()
 
 	instance := &resourcesv1alpha1.MaskinportenClient{}
@@ -245,7 +236,7 @@ func (r *MaskinportenClientReconciler) computeDesiredState(
 	req *maskinportenClientRequest,
 	instance *resourcesv1alpha1.MaskinportenClient,
 ) (maskinportenResourceList, error) {
-	_, span := r.tracer.Start(ctx, "Reconcile.computeDesiredState")
+	_, span := r.runtime.Tracer().Start(ctx, "Reconcile.computeDesiredState")
 	defer span.End()
 
 	resources := make(maskinportenResourceList, 0)
@@ -290,7 +281,7 @@ func (r *MaskinportenClientReconciler) fetchCurrentState(
 	ctx context.Context,
 	req *maskinportenClientRequest,
 ) (maskinportenResourceList, error) {
-	ctx, span := r.tracer.Start(ctx, "Reconcile.fetchCurrentState")
+	ctx, span := r.runtime.Tracer().Start(ctx, "Reconcile.fetchCurrentState")
 	defer span.End()
 
 	resources := make(maskinportenResourceList, 0)
@@ -338,7 +329,7 @@ func (r *MaskinportenClientReconciler) reconcile(
 	currentState maskinportenResourceList,
 	desiredState maskinportenResourceList,
 ) (reconciliationActionList, error) {
-	ctx, span := r.tracer.Start(ctx, "Reconcile.reconcile")
+	ctx, span := r.runtime.Tracer().Start(ctx, "Reconcile.reconcile")
 	defer span.End()
 
 	actions := make(reconciliationActionList, 0)

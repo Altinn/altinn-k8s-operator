@@ -3,6 +3,8 @@ package operatorcontext
 import (
 	"context"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 const EnvLocal = "local"
@@ -55,4 +57,12 @@ func (c *Context) Err() error {
 
 func (c *Context) Value(key any) any {
 	return c.inner.Value(key)
+}
+
+func (c *Context) Update(ctx context.Context) {
+	c.inner = ctx
+}
+
+func (c *Context) ClearCurrentSpan() {
+	c.inner = trace.ContextWithSpan(c.inner, nil)
 }

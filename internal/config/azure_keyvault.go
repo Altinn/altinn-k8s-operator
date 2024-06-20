@@ -7,9 +7,16 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
+	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
+	"go.opentelemetry.io/otel"
 )
 
 func loadFromAzureKeyVault(operatorContext *operatorcontext.Context) (*Config, error) {
+	tracer := otel.Tracer(telemetry.ServiceName)
+	ctx, span := tracer.Start(operatorContext, "GetConfig.AzureKeyVault")
+	operatorContext.Update(ctx)
+	defer span.End()
+
 	var cred azcore.TokenCredential
 	var err error
 
