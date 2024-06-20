@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestConfig_Missing_Values_Fail(t *testing.T) {
+func TestConfigMissingValuesFail(t *testing.T) {
 	RegisterTestingT(t)
 
 	file, err := os.CreateTemp(os.TempDir(), "*.env")
@@ -37,7 +37,7 @@ func TestConfig_Missing_Values_Fail(t *testing.T) {
 	Expect(ok).To(BeTrue())
 }
 
-func TestConfig_TestEnv_Loads_Ok(t *testing.T) {
+func TestConfigTestEnvLoadsOk(t *testing.T) {
 	RegisterTestingT(t)
 
 	operatorContext := operatorcontext.DiscoverOrDie()
