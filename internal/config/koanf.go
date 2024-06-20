@@ -16,10 +16,13 @@ var (
 	parser = dotenv.ParserEnv("", ".", func(s string) string { return s })
 )
 
-func loadFromKoanf(operatorContext *operatorcontext.Context) (*Config, error) {
+func loadFromKoanf(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
 	tryFindProjectRoot()
 
-	filePath := "local.env"
+	if configFilePath == "" {
+		configFilePath = "local.env"
+	}
+
 	if !operatorContext.IsLocal() {
 		return nil, fmt.Errorf("loading config from koanf is only supported for local environment")
 	}
@@ -28,26 +31,26 @@ func loadFromKoanf(operatorContext *operatorcontext.Context) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		if path.IsAbs(filePath) {
-			return nil, fmt.Errorf("env file does not exist: '%s'", filePath)
+	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+		if path.IsAbs(configFilePath) {
+			return nil, fmt.Errorf("env file does not exist: '%s'", configFilePath)
 		} else {
-			return nil, fmt.Errorf("env file does not exist in '%s': '%s'", currentDir, filePath)
+			return nil, fmt.Errorf("env file does not exist in '%s': '%s'", currentDir, configFilePath)
 		}
 	}
 
-	if !path.IsAbs(filePath) {
-		filePath = path.Join(currentDir, filePath)
+	if !path.IsAbs(configFilePath) {
+		configFilePath = path.Join(currentDir, configFilePath)
 	}
 
-	if err := k.Load(file.Provider(filePath), parser); err != nil {
-		return nil, fmt.Errorf("error loading config '%s': %w", filePath, err)
+	if err := k.Load(file.Provider(configFilePath), parser); err != nil {
+		return nil, fmt.Errorf("error loading config '%s': %w", configFilePath, err)
 	}
 
 	var cfg Config
 
 	if err := k.Unmarshal("", &cfg); err != nil {
-		return nil, fmt.Errorf("error unmarshalling config '%s': %w", filePath, err)
+		return nil, fmt.Errorf("error unmarshalling config '%s': %w", configFilePath, err)
 	}
 
 	return &cfg, nil

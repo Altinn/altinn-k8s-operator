@@ -22,7 +22,7 @@ func NewRuntime() (rt.Runtime, error) {
 		return nil, err
 	}
 
-	cfg, err := config.GetConfig(operatorContext)
+	cfg, err := config.GetConfig(operatorContext, "")
 	if err != nil {
 		return nil, err
 	}
