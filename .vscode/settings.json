@@ -15,7 +15,11 @@
         "--issues-exit-code=0"
     ],
     "cSpell.words": [
-      "golines",
-      "segmentio"
+        "golines",
+        "segmentio",
+        "azcore",
+        "azidentity",
+        "azsecrets",
+        "keyvault"
     ]
 }

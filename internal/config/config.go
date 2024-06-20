@@ -22,7 +22,7 @@ func GetConfig(operatorContext *operatorcontext.Context, configFilePath string) 
 	if operatorContext.IsLocal() {
 		cfg, err = loadFromKoanf(operatorContext, configFilePath)
 	} else {
-		cfg, err = loadFromAzureKeyVault()
+		cfg, err = loadFromAzureKeyVault(operatorContext)
 	}
 
 	if err != nil {
