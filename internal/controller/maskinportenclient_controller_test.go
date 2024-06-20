@@ -53,6 +53,7 @@ var _ = Describe("MaskinportenClient Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := NewMaskinportenClientReconciler(
+				context.Background(),
 				k8sClient,
 				k8sClient.Scheme(),
 			)

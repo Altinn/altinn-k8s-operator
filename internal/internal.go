@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"context"
+
 	"github.com/altinn/altinn-k8s-operator/internal/config"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
-	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
 	"github.com/jonboulle/clockwork"
 )
@@ -16,8 +18,8 @@ type runtime struct {
 
 var _ rt.Runtime = (*runtime)(nil)
 
-func NewRuntime() (rt.Runtime, error) {
-	operatorContext, err := operatorcontext.Discover()
+func NewRuntime(ctx context.Context) (rt.Runtime, error) {
+	operatorContext, err := operatorcontext.Discover(ctx)
 	if err != nil {
 		return nil, err
 	}

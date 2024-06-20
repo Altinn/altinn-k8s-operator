@@ -36,8 +36,12 @@ type MaskinportenClientReconciler struct {
 	tracer  trace.Tracer
 }
 
-func NewMaskinportenClientReconciler(client client.Client, scheme *runtime.Scheme) *MaskinportenClientReconciler {
-	rt, err := internal.NewRuntime()
+func NewMaskinportenClientReconciler(
+	ctx context.Context,
+	client client.Client,
+	scheme *runtime.Scheme,
+) *MaskinportenClientReconciler {
+	rt, err := internal.NewRuntime(ctx)
 	if err != nil {
 		panic(err)
 	}

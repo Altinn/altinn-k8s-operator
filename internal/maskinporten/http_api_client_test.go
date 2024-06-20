@@ -11,7 +11,7 @@ import (
 
 	"github.com/altinn/altinn-k8s-operator/internal/caching"
 	"github.com/altinn/altinn-k8s-operator/internal/config"
-	operatorcontext "github.com/altinn/altinn-k8s-operator/internal/operator_context"
+	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/onsi/gomega"
@@ -28,7 +28,7 @@ func getMaskinportenApiFixture(
 	g *gomega.WithT,
 	generateApis func(cfg *config.Config) (apis []testApi),
 ) (*httptest.Server, *config.Config) {
-	operatorContext := operatorcontext.DiscoverOrDie()
+	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
 	cfg := config.GetConfigOrDie(operatorContext, "")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func getMaskinportenApiWellKnownFixture(g *gomega.WithT, statusCode int) (*httpt
 func TestFixtureIsNotRemote(t *testing.T) {
 	g := NewWithT(t)
 
-	operatorContext := operatorcontext.DiscoverOrDie()
+	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
 	configBefore := config.GetConfigOrDie(operatorContext, "")
 
 	server, configAfter := getMaskinportenApiWellKnownFixture(g, http.StatusOK)
