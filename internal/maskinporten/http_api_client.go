@@ -10,6 +10,7 @@ import (
 
 	"github.com/altinn/altinn-k8s-operator/internal/caching"
 	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
@@ -53,7 +54,7 @@ func newApiClient(config *config.MaskinportenApiConfig, clock clockwork.Clock) (
 		config: config,
 		client: http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		jwk:    jwk,
-		tracer: otel.Tracer("maskinporten.ApiClient"),
+		tracer: otel.Tracer(telemetry.ServiceName),
 	}
 
 	client.wellKnown = caching.NewCachedAtom(5*time.Minute, clock, client.wellKnownFetcher)

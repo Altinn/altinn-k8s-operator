@@ -17,6 +17,9 @@ type MaskinportenApiConfig struct {
 }
 
 func GetConfig(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
+	span := operatorContext.StartSpan("GetConfig")
+	defer span.End()
+
 	var cfg *Config
 	var err error
 	if operatorContext.IsLocal() {

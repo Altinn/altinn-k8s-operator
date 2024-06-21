@@ -17,6 +17,9 @@ var (
 )
 
 func loadFromKoanf(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
+	span := operatorContext.StartSpan("GetConfig.Koanf")
+	defer span.End()
+
 	tryFindProjectRoot()
 
 	if configFilePath == "" {

@@ -10,6 +10,9 @@ import (
 )
 
 func loadFromAzureKeyVault(operatorContext *operatorcontext.Context) (*Config, error) {
+	span := operatorContext.StartSpan("GetConfig.AzureKeyVault")
+	defer span.End()
+
 	var cred azcore.TokenCredential
 	var err error
 
@@ -23,7 +26,7 @@ func loadFromAzureKeyVault(operatorContext *operatorcontext.Context) (*Config, e
 		return nil, fmt.Errorf("error getting credentials for loading config: %w", err)
 	}
 
-	url := fmt.Sprintf("https://altinn-%s-operator-kv.vault.azure.net", operatorContext.Env)
+	url := fmt.Sprintf("https://altinn-%s-operator-kv.vault.azure.net", operatorContext.Environment)
 	client, err := azsecrets.NewClient(url, cred, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error building client for Azure KV: %w", err)
@@ -33,7 +36,7 @@ func loadFromAzureKeyVault(operatorContext *operatorcontext.Context) (*Config, e
 
 	config := &Config{}
 	for _, secretKey := range secretKeys {
-		secret, err := client.GetSecret(operatorContext, secretKey, "", nil)
+		secret, err := client.GetSecret(operatorContext.Context, secretKey, "", nil)
 		if err != nil {
 			return nil, fmt.Errorf("error getting secret: %s, %w", secretKey, err)
 		}

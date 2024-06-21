@@ -2,21 +2,24 @@ package operatorcontext
 
 import (
 	"context"
-	"time"
+
+	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-const EnvLocal = "local"
-
-var _ context.Context = (*Context)(nil)
+const EnvironmentLocal = "local"
 
 type Context struct {
-	Te    string
-	Env   string
-	inner context.Context
+	ServiceOwner string
+	Environment  string
+	// Context which will be cancelled when the program is shut down
+	Context context.Context
+	tracer  trace.Tracer
 }
 
 func (c *Context) IsLocal() bool {
-	return c.Env == EnvLocal
+	return c.Environment == EnvironmentLocal
 }
 
 func Discover(ctx context.Context) (*Context, error) {
@@ -27,10 +30,15 @@ func Discover(ctx context.Context) (*Context, error) {
 
 	// This should come from the environment/context somewhere
 	// there should be 1:1 mapping between TE/env:cluster
-	te := "local"
-	env := EnvLocal
+	serviceOwner := "local"
+	environment := EnvironmentLocal
 
-	return &Context{Te: te, Env: env, inner: ctx}, nil
+	return &Context{
+		ServiceOwner: serviceOwner,
+		Environment:  environment,
+		Context:      ctx,
+		tracer:       otel.Tracer(telemetry.ServiceName),
+	}, nil
 }
 
 func DiscoverOrDie(ctx context.Context) *Context {
@@ -41,18 +49,11 @@ func DiscoverOrDie(ctx context.Context) *Context {
 	return context
 }
 
-func (c *Context) Deadline() (deadline time.Time, ok bool) {
-	return c.inner.Deadline()
-}
-
-func (c *Context) Done() <-chan struct{} {
-	return c.inner.Done()
-}
-
-func (c *Context) Err() error {
-	return c.inner.Err()
-}
-
-func (c *Context) Value(key any) any {
-	return c.inner.Value(key)
+func (c *Context) StartSpan(
+	spanName string,
+	opts ...trace.SpanStartOption,
+) trace.Span {
+	ctx, span := c.tracer.Start(c.Context, spanName, opts...)
+	c.Context = ctx
+	return span
 }

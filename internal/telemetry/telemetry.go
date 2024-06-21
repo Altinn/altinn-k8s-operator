@@ -19,9 +19,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// ConfigureOtel bootstraps the OpenTelemetry pipeline.
+const ServiceName string = "altinn-k8s-operator"
+
+// ConfigureOTel bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func ConfigureOtel(ctx context.Context) (shutdown func(context.Context) error, err error) {
+func ConfigureOTel(ctx context.Context) (shutdown func(context.Context) error, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	// shutdown calls cleanup functions registered via shutdownFuncs.
@@ -44,7 +46,7 @@ func ConfigureOtel(ctx context.Context) (shutdown func(context.Context) error, e
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			// the service name used to display traces in backends
-			semconv.ServiceName("altinn-operator"),
+			semconv.ServiceName(ServiceName),
 		),
 	)
 	if err != nil {

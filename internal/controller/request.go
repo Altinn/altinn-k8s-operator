@@ -43,7 +43,7 @@ func (r *MaskinportenClientReconciler) mapRequest(
 	ctx context.Context,
 	req ctrl.Request,
 ) (*maskinportenClientRequest, error) {
-	_, span := r.tracer.Start(ctx, "Reconcile.mapRequest")
+	_, span := r.runtime.Tracer().Start(ctx, "Reconcile.mapRequest")
 	defer span.End()
 
 	nameSplit := strings.Split(req.Name, "-")
@@ -59,6 +59,6 @@ func (r *MaskinportenClientReconciler) mapRequest(
 		Name:           req.Name,
 		Namespace:      req.Namespace,
 		AppId:          appId,
-		AppLabel:       fmt.Sprintf("%s-%s-deployment", operatorContext.Te, appId),
+		AppLabel:       fmt.Sprintf("%s-%s-deployment", operatorContext.ServiceOwner, appId),
 	}, nil
 }
