@@ -53,8 +53,6 @@ func NewRuntime(ctx context.Context) (rt.Runtime, error) {
 		meter:           otel.Meter(telemetry.ServiceName),
 	}
 
-	operatorContext.ClearCurrentSpan()
-
 	return rt, nil
 }
 

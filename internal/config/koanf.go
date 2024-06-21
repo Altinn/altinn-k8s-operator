@@ -6,11 +6,9 @@ import (
 	"path"
 
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
-	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
-	"go.opentelemetry.io/otel"
 )
 
 var (
@@ -19,9 +17,7 @@ var (
 )
 
 func loadFromKoanf(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
-	tracer := otel.Tracer(telemetry.ServiceName)
-	ctx, span := tracer.Start(operatorContext, "GetConfig.Koanf")
-	operatorContext.Update(ctx)
+	span := operatorContext.StartSpan("GetConfig.Koanf")
 	defer span.End()
 
 	tryFindProjectRoot()

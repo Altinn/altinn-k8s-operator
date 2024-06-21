@@ -2,9 +2,7 @@ package config
 
 import (
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
-	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	"github.com/go-playground/validator/v10"
-	"go.opentelemetry.io/otel"
 )
 
 type Config struct {
@@ -19,9 +17,7 @@ type MaskinportenApiConfig struct {
 }
 
 func GetConfig(operatorContext *operatorcontext.Context, configFilePath string) (*Config, error) {
-	tracer := otel.Tracer(telemetry.ServiceName)
-	ctx, span := tracer.Start(operatorContext, "GetConfig")
-	operatorContext.Update(ctx)
+	span := operatorContext.StartSpan("GetConfig")
 	defer span.End()
 
 	var cfg *Config
