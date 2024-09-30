@@ -9,10 +9,12 @@ import (
 )
 
 const EnvironmentLocal = "local"
+const EnvironmentDev = "dev"
 
 type Context struct {
-	ServiceOwner string
-	Environment  string
+	ServiceOwnerName  string
+	ServiceOwnerOrgNo string
+	Environment       string
 	// Context which will be cancelled when the program is shut down
 	Context context.Context
 	tracer  trace.Tracer
@@ -22,22 +24,32 @@ func (c *Context) IsLocal() bool {
 	return c.Environment == EnvironmentLocal
 }
 
+func (c *Context) IsDev() bool {
+	return c.Environment == EnvironmentDev
+}
+
+func (c *Context) OverrideEnvironment(env string) {
+	c.Environment = env
+}
+
 func Discover(ctx context.Context) (*Context, error) {
 	err := ctx.Err()
 	if err != nil {
 		return nil, err
 	}
 
-	// This should come from the environment/context somewhere
+	// TODO: this should come from the environment/context somewhere
 	// there should be 1:1 mapping between TE/env:cluster
-	serviceOwner := "local"
+	serviceOwnerName := "local"
+	serviceOwnerOrgNo := "991825827"
 	environment := EnvironmentLocal
 
 	return &Context{
-		ServiceOwner: serviceOwner,
-		Environment:  environment,
-		Context:      ctx,
-		tracer:       otel.Tracer(telemetry.ServiceName),
+		ServiceOwnerName:  serviceOwnerName,
+		ServiceOwnerOrgNo: serviceOwnerOrgNo,
+		Environment:       environment,
+		Context:           ctx,
+		tracer:            otel.Tracer(telemetry.ServiceName),
 	}, nil
 }
 

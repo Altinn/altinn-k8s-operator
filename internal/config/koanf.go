@@ -20,30 +20,26 @@ func loadFromKoanf(operatorContext *operatorcontext.Context, configFilePath stri
 	span := operatorContext.StartSpan("GetConfig.Koanf")
 	defer span.End()
 
-	tryFindProjectRoot()
+	rootDir := TryFindProjectRoot()
 
 	if configFilePath == "" {
-		configFilePath = "local.env"
+		configFilePath = fmt.Sprintf("%s.env", operatorContext.Environment)
 	}
 
-	if !operatorContext.IsLocal() {
+	if !operatorContext.IsLocal() && !operatorContext.IsDev() {
 		return nil, fmt.Errorf("loading config from koanf is only supported for local environment")
 	}
 
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 		if path.IsAbs(configFilePath) {
 			return nil, fmt.Errorf("env file does not exist: '%s'", configFilePath)
 		} else {
-			return nil, fmt.Errorf("env file does not exist in '%s': '%s'", currentDir, configFilePath)
+			return nil, fmt.Errorf("env file does not exist in '%s': '%s'", rootDir, configFilePath)
 		}
 	}
 
 	if !path.IsAbs(configFilePath) {
-		configFilePath = path.Join(currentDir, configFilePath)
+		configFilePath = path.Join(rootDir, configFilePath)
 	}
 
 	if err := k.Load(file.Provider(configFilePath), parser); err != nil {
@@ -57,16 +53,4 @@ func loadFromKoanf(operatorContext *operatorcontext.Context, configFilePath stri
 	}
 
 	return &cfg, nil
-}
-
-func tryFindProjectRoot() {
-	for {
-		if _, err := os.Stat("go.mod"); err == nil {
-			return
-		}
-
-		if err := os.Chdir(".."); err != nil {
-			return
-		}
-	}
 }

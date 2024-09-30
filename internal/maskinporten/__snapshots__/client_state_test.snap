@@ -1,0 +1,15 @@
+
+[TestPublicJwksConversion - 1]
+{
+ "keys": [
+  {
+   "alg": "RS256",
+   "e": "AQAB",
+   "kid": "b67efbf1-f75d-4fb1-9cac-242cc2b5d334.0",
+   "kty": "RSA",
+   "n": "tabD3r_8nii4gPerNyupCXWm9baeeylz6ZoAeBREKTY2hRimFZgWvDsuMzReGqijrsijmkBxkScQpCW5fGvhGCgw0KUE5ucIYlmV_CIA_ZwHtpwc_nuqXSqtWBY59wSE8TH3Vm9pk-rljBGpxnb8qBXQ50o_CsPDwDuEK_lUll_WFOAx5nL5qcffiabEiGnl2oNnQaXhtbPqCIDufSdpfaPHnlz_ko6klbs1fewxpM4zFxvDZLVnxDSqYgi1DZVNcWH7lPvHvo7y7rbs698VXs-uztTJ4fZ5pm-epqwKnagSeV-9f_vchS09qp3A9G7FeQWucZLHqfEver2x6C2nNw",
+   "use": "sig"
+  }
+ ]
+}
+---

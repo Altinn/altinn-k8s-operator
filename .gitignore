@@ -29,3 +29,6 @@ go.work
 test/**/obj/
 test/**/bin/
 test/**/charts/
+
+*.env
+!local.env.sample

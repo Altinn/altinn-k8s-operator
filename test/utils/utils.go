@@ -2,18 +2,22 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	"golang.org/x/exp/rand"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 )
 
 func StartKindCluster() error {
@@ -118,7 +122,13 @@ func GetK8sClient() (*rest.RESTClient, error) {
 		return k8sClient, nil
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", "")
+	home := homedir.HomeDir()
+	if home == "" {
+		return nil, fmt.Errorf("Could not get KUBECONFIG")
+	}
+	kubeconfig := filepath.Join(home, ".kube", "config")
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -143,4 +153,25 @@ func GetK8sClient() (*rest.RESTClient, error) {
 	}
 
 	return k8sClient, nil
+}
+
+type deterministicRand struct {
+	prng *rand.Rand
+}
+
+func NewDeterministicRand() io.Reader {
+	return &deterministicRand{
+		prng: rand.New(rand.NewSource(1337)),
+	}
+}
+
+func (r *deterministicRand) Read(p []byte) (n int, err error) {
+	if len(p) == 1 {
+		// to work around `randutil.MaybeReadByte`
+		// which is used to enforce non-determinism...
+		// but here we are just unit/snapshot testing stuff so it's fine
+		return 1, nil
+	}
+
+	return r.prng.Read(p)
 }

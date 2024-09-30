@@ -2,8 +2,10 @@ package internal
 
 import (
 	"context"
+	crand "crypto/rand"
 
 	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
@@ -15,16 +17,17 @@ import (
 )
 
 type runtime struct {
-	config          config.Config
-	operatorContext operatorcontext.Context
-	clientManager   maskinporten.ClientManager
-	tracer          trace.Tracer
-	meter           metric.Meter
+	config                config.Config
+	operatorContext       operatorcontext.Context
+	crypto                crypto.CryptoService
+	maskinportenApiClient *maskinporten.HttpApiClient
+	tracer                trace.Tracer
+	meter                 metric.Meter
 }
 
 var _ rt.Runtime = (*runtime)(nil)
 
-func NewRuntime(ctx context.Context) (rt.Runtime, error) {
+func NewRuntime(ctx context.Context, env string) (rt.Runtime, error) {
 	tracer := otel.Tracer(telemetry.ServiceName)
 	ctx, span := tracer.Start(ctx, "NewRuntime")
 	defer span.End()
@@ -33,24 +36,33 @@ func NewRuntime(ctx context.Context) (rt.Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if env != "" {
+		operatorContext.OverrideEnvironment(env)
+	}
 
-	cfg, err := config.GetConfig(operatorContext, "")
+	cfg, err := config.GetConfig(operatorContext, config.ConfigSourceDefault, "")
 	if err != nil {
 		return nil, err
 	}
 
 	clock := clockwork.NewRealClock()
-	clientManager, err := maskinporten.NewClientManager(&cfg.MaskinportenApi, clock)
+
+	cryptoRand := crand.Reader
+
+	crypto := crypto.NewService(operatorContext, clock, cryptoRand)
+
+	maskinportenApiClient, err := maskinporten.NewHttpApiClient(&cfg.MaskinportenApi, operatorContext, clock)
 	if err != nil {
 		return nil, err
 	}
 
 	rt := &runtime{
-		config:          *cfg,
-		operatorContext: *operatorContext,
-		clientManager:   clientManager,
-		tracer:          tracer,
-		meter:           otel.Meter(telemetry.ServiceName),
+		config:                *cfg,
+		operatorContext:       *operatorContext,
+		crypto:                *crypto,
+		maskinportenApiClient: maskinportenApiClient,
+		tracer:                tracer,
+		meter:                 otel.Meter(telemetry.ServiceName),
 	}
 
 	return rt, nil
@@ -64,8 +76,12 @@ func (r *runtime) GetOperatorContext() *operatorcontext.Context {
 	return &r.operatorContext
 }
 
-func (r *runtime) GetMaskinportenClientManager() maskinporten.ClientManager {
-	return r.clientManager
+func (r *runtime) GetCrypto() *crypto.CryptoService {
+	return &r.crypto
+}
+
+func (r *runtime) GetMaskinportenApiClient() *maskinporten.HttpApiClient {
+	return r.maskinportenApiClient
 }
 
 func (r *runtime) Tracer() trace.Tracer {
