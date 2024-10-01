@@ -356,20 +356,20 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					return
 				}
 
+				clients := state.Db.Query(func(ocr *fakes.ClientRecord) bool {
+					return ocr.ClientId == clientId
+				})
+				if len(clients) != 1 {
+					w.WriteHeader(404)
+					return
+				}
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
-				clients := state.Db.Clients
-				for _, client := range clients {
-					if client.ClientId == clientId {
-						err := encoder.Encode(clients)
-						if err != nil {
-							w.WriteHeader(500)
-							log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-						}
-					}
+				err := encoder.Encode(clients[0].Client)
+				if err != nil {
+					w.WriteHeader(500)
+					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
 				}
-
-				w.WriteHeader(204)
 			case "PUT":
 				if auth(r) == nil {
 					w.WriteHeader(401)
