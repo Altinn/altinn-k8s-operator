@@ -414,6 +414,7 @@ func (r *MaskinportenClientReconciler) reconcile(
 			updatedSecret := currentState.Secret.Manifest.DeepCopy()
 			maskinporten.DeleteSecretStateContent(updatedSecret)
 
+			// TODO: ownerreference?
 			if err := r.Update(ctx, updatedSecret); err != nil {
 				return executedCommands, err
 			}

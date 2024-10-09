@@ -303,6 +303,8 @@ func (s *ClientState) Reconcile(
 					Jwk:       &jwks.Keys[0],
 				}
 				commands = append(commands, Command{
+					// TODO: what happens if we succeed in updating the secret but fail in updating the client in API?
+					// Update API before secret
 					Data: &UpdateSecretContentCommand{
 						SecretContent: secretStateContent,
 					},

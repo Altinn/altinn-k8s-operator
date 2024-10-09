@@ -186,7 +186,7 @@ func (s *CryptoService) RotateIfNeeded(appId string, currentJwks *jose.JSONWebKe
 		if err != nil {
 			return nil, err
 		}
-		newJwks.Keys = append(newJwks.Keys, *activeKey)
+		newJwks.Keys = append(newJwks.Keys, *activeKey) // TODO: verify that app-lib reads latest key
 		return newJwks, nil
 	}
 }
