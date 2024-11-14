@@ -12,12 +12,20 @@ create: ## Initialize the test-application infra.
 build: ## Build the local-testapp image.
 	kubectl config use-context kind-operator
 	docker build -t local-testapp:latest . && helm dep up ./deployment/
-	kind load docker-image local-testapp:latest --name operator
+	kind load docker-image local-testapp:latest
 
 .PHONY: deploy
 deploy: build ## Deploy test-application to current kube context.
 	kubectl config use-context kind-operator
 	helm upgrade --install --force local-testapp ./deployment --set deployment.image.repository=local-testapp
+
+.PHONY: deps
+deps: ## Install dependencies for the operator
+	cd ../../
+	docker build -t operator-maskinporten-fakes:latest .
+	kind load docker-image operator-maskinporten-fakes:latest
+	kubectl run hazelcast --image=operator-maskinporten-fakes:latest --port=5701
+
 
 .PHONY: client
 client: ## Deploy a MaskinportenClient CRD to the cluster.

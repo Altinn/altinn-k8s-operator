@@ -14,6 +14,7 @@ import (
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	"github.com/altinn/altinn-k8s-operator/internal"
+	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 )
 
 var _ = Describe("MaskinportenClient Controller", func() {
@@ -103,10 +104,29 @@ var _ = Describe("MaskinportenClient Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// The client CRD was reconciled
 			resource := &resourcesv1alpha1.MaskinportenClient{}
 			err = k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resource.Status.State).To(Equal("reconciled"))
+			Expect(resource.Status.ObservedGeneration).To(Equal(int64(1)))
+			Expect(resource.Status.Authority).To(Equal(rt.GetConfig().MaskinportenApi.AuthorityUrl))
+
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, typeNamespacedSecretName, secret)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the secret state
+			secretState, err := maskinporten.DeserializeSecretStateContent(secret)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(secretState.ClientId).NotTo(BeEmpty())
+			Expect(secretState.Authority).To(Equal(rt.GetConfig().MaskinportenApi.AuthorityUrl))
+			Expect(secretState.Jwk).NotTo(BeNil())
+			Expect(secretState.Jwks).NotTo(BeNil())
+			Expect(secretState.Jwks.Keys).NotTo(BeEmpty())
+			Expect(resource.Status.ClientId).To(Equal(secretState.ClientId))
+			Expect(secretState.Jwk.KeyID).To(Equal(secretState.Jwks.Keys[0].KeyID))
+			Expect(secretState.Jwk.KeyID).To(Equal(resource.Status.KeyIds[0]))
 		})
 	})
 })

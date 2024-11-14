@@ -106,8 +106,9 @@ var _ = Describe("controller", Ordered, func() {
 			verifyStatusUpdated := func() error {
 				maskinportenClient := &resourcesv1alpha1.MaskinportenClient{}
 				err := k8sClient.Get().
-					Namespace("").
-					Resource("local-testapp").
+					Resource("maskinportenclients").
+					Namespace("default").
+					Name("local-testapp").
 					Do(context.Background()).
 					Into(maskinportenClient)
 

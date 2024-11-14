@@ -558,7 +558,7 @@ func (c *HttpApiClient) wellKnownFetcher(ctx context.Context) (*WellKnownRespons
 		return nil, err
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.retryableHTTPDo(req)
 	if err != nil {
 		return nil, err
 	}
@@ -595,6 +595,8 @@ func deserialize[T any](resp *http.Response) (T, error) {
 func (c *HttpApiClient) retryableHTTPDo(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
+
+	req.Header.Add("X-Altinn-Operator-RunId", c.context.RunId)
 
 	// TODO: different strategy??
 

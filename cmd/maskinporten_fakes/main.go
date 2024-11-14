@@ -25,20 +25,27 @@ import (
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 )
 
-const StateKey = "state"
+type contextKey string
+
+const StateKey contextKey = "state"
+
+const POST = "POST"
+const GET = "GET"
 
 func main() {
+	log.SetOutput(os.Stdout)
+	log.Println("Starting server..")
 	ctx := setupSignalHandler()
 	var wg sync.WaitGroup
-
-	state := fakes.NewState()
-	ctx = context.WithValue(ctx, StateKey, state)
 
 	operatorContext := operatorcontext.DiscoverOrDie(ctx)
 	cfg := config.GetConfigOrDie(operatorContext, config.ConfigSourceKoanf, "")
 
+	state := fakes.NewState(cfg)
+	ctx = context.WithValue(ctx, StateKey, state)
+
 	wg.Add(2)
-	go runMaskinportenApi(ctx, &wg, cfg)
+	go runMaskinportenApi(ctx, &wg)
 	go runSelfServiceApi(ctx, &wg)
 
 	log.Println("Started server threads")
@@ -77,7 +84,7 @@ func serve(ctx context.Context, name string, addr string, registerHandlers func(
 	}
 }
 
-func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config) {
+func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	name := "Maskinporten API"
 	addr := ":8050"
@@ -85,34 +92,9 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup, cfg *config.Con
 	state := ctx.Value(StateKey).(*fakes.State)
 	assert.Assert(state != nil)
 
-	jwk := jose.JSONWebKey{}
-	if err := json.Unmarshal([]byte(cfg.MaskinportenApi.Jwk), &jwk); err != nil {
-		log.Fatalf("couldn't unmarshal JWK: %v", err)
-	}
-	publicJwk := jwk.Public()
-
-	integrationType := maskinporten.OidcClientRequestIntegrationTypeMaskinporten
-	appType := maskinporten.OidcClientRequestApplicationTypeWeb
-	tokenEndpointMethod := maskinporten.OidcClientRequestTokenEndpointAuthMethodPrivateKeyJwt
-	orgNo := "123456789"
-	err := state.Db.Insert(&maskinporten.OidcClientRequest{
-		ClientName:  cfg.MaskinportenApi.ClientId,
-		ClientOrgno: &orgNo,
-		GrantTypes: []maskinporten.OidcClientRequestGrantTypesElem{
-			maskinporten.OidcClientRequestGrantTypesElemUrnIetfParamsOauthGrantTypeJwtBearer,
-		},
-		Scopes:                  []string{cfg.MaskinportenApi.Scope},
-		IntegrationType:         &integrationType,
-		ApplicationType:         &appType,
-		TokenEndpointAuthMethod: &tokenEndpointMethod,
-	}, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{publicJwk}})
-	if err != nil {
-		log.Fatalf("couldn't insert supplier client: %v", err)
-	}
-
 	serve(ctx, name, addr, func(mux *http.ServeMux) {
 		mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != "POST" {
+			if r.Method != POST {
 				w.WriteHeader(404)
 				return
 			}
@@ -148,7 +130,7 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup, cfg *config.Con
 				return
 			}
 
-			clients := state.Db.Query(func(ocr *fakes.ClientRecord) bool {
+			clients := state.GetDb(r).Query(func(ocr *fakes.ClientRecord) bool {
 				if ocr.Jwks == nil {
 					return false
 				}
@@ -212,7 +194,7 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup, cfg *config.Con
 			}
 		})
 		mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != "GET" {
+			if r.Method != GET {
 				w.WriteHeader(404)
 				return
 			}
@@ -269,12 +251,25 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 	}
 
 	serve(ctx, name, addr, func(mux *http.ServeMux) {
+		mux.HandleFunc("/dump/please", func(w http.ResponseWriter, r *http.Request) {
+			state := r.Context().Value(StateKey).(*fakes.State)
+			assert.Assert(state != nil)
+
+			w.Header().Add("Content-Type", "application/json")
+			encoder := json.NewEncoder(w)
+			err := encoder.Encode(state.GetAll())
+			if err != nil {
+				w.WriteHeader(500)
+				log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+			}
+		})
+
 		mux.HandleFunc("/clients", func(w http.ResponseWriter, r *http.Request) {
 			state := r.Context().Value(StateKey).(*fakes.State)
 			assert.Assert(state != nil)
 
 			switch r.Method {
-			case "GET":
+			case GET:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
@@ -282,7 +277,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
-				records := state.Db.Clients
+				records := state.GetDb(r).Clients
 				clients := make([]*maskinporten.OidcClientResponse, len(records))
 				for i, record := range records {
 					clients[i] = record.Client
@@ -293,7 +288,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					w.WriteHeader(500)
 					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
 				}
-			case "POST":
+			case POST:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
@@ -307,26 +302,17 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
 					return
 				}
-				err = state.Db.Insert(&client, nil)
+				clientRecord, err := state.GetDb(r).Insert(&client, nil, "")
 				if err != nil {
 					w.WriteHeader(400)
 					log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
 					return
 				}
 
-				clients := state.Db.Query(func(ocr *fakes.ClientRecord) bool {
-					return ocr.ClientId == client.ClientName
-				})
-				if len(clients) != 1 {
-					w.WriteHeader(500)
-					log.Printf("couldn't find client after insert\n")
-					return
-				}
-
 				w.WriteHeader(201)
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
-				err = encoder.Encode(clients[0].Client)
+				err = encoder.Encode(clientRecord.Client)
 				if err != nil {
 					w.WriteHeader(500)
 					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
@@ -350,22 +336,20 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			clientId := r.PathValue("clientId")
 
 			switch r.Method {
-			case "GET":
+			case GET:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
 				}
 
-				clients := state.Db.Query(func(ocr *fakes.ClientRecord) bool {
-					return ocr.ClientId == clientId
-				})
-				if len(clients) != 1 {
+				clientRecord := state.GetDb(r).Get(clientId)
+				if clientRecord == nil {
 					w.WriteHeader(404)
 					return
 				}
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
-				err := encoder.Encode(clients[0].Client)
+				err := encoder.Encode(clientRecord.Client)
 				if err != nil {
 					w.WriteHeader(500)
 					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
@@ -384,16 +368,8 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
 					return
 				}
-				if client.ClientName != clientId {
-					w.WriteHeader(400)
-					log.Printf(
-						"couldn't read request: client ID did not match path=%s body=%s\n",
-						clientId,
-						client.ClientName,
-					)
-					return
-				}
-				deleted := state.Db.Delete(clientId)
+
+				deleted := state.GetDb(r).Delete(clientId)
 				if !deleted {
 					w.WriteHeader(400)
 					log.Printf(
@@ -402,7 +378,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					)
 					return
 				}
-				err = state.Db.Insert(&client, nil)
+				_, err = state.GetDb(r).Insert(&client, nil, "")
 				if err != nil {
 					w.WriteHeader(400)
 					log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
@@ -432,29 +408,27 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			clientId := r.PathValue("clientId")
 
 			switch r.Method {
-			case "GET":
+			case GET:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
 				}
 				w.Header().Add("Content-Type", "application/json")
 
-				clients := state.Db.Query(func(ocr *fakes.ClientRecord) bool {
-					return ocr.ClientId == clientId
-				})
-				if len(clients) != 1 {
+				clientRecord := state.GetDb(r).Get(clientId)
+				if clientRecord == nil {
 					w.WriteHeader(404)
 					return
 				}
 
 				encoder := json.NewEncoder(w)
-				err := encoder.Encode(clients[0].Jwks)
+				err := encoder.Encode(clientRecord.Jwks)
 				if err != nil {
 					w.WriteHeader(500)
 					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
 				}
 
-			case "POST":
+			case POST:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
@@ -469,7 +443,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					return
 				}
 
-				err = state.Db.UpdateJwks(clientId, &jwks)
+				err = state.GetDb(r).UpdateJwks(clientId, &jwks)
 				if err != nil {
 					w.WriteHeader(400)
 					log.Printf("couldn't update JWKS: %v\n", errors.Wrap(err, 0))

@@ -7,6 +7,7 @@ import (
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	"github.com/go-errors/errors"
 	"github.com/go-jose/go-jose/v4"
+	"github.com/google/uuid"
 )
 
 var InvalidClientName = errors.Errorf("invalid client ID")
@@ -25,21 +26,30 @@ type ClientRecord struct {
 	Jwks     *jose.JSONWebKeySet
 }
 
-func NewDb() Db {
-	return Db{
-		Clients:       make([]ClientRecord, 64),
+func NewDb() *Db {
+	return &Db{
+		Clients:       make([]ClientRecord, 0, 64),
 		ClientIdIndex: make(map[string]int, 64),
 	}
 }
 
-func (d *Db) Insert(req *maskinporten.OidcClientRequest, jwks *jose.JSONWebKeySet) error {
+func (d *Db) Insert(
+	req *maskinporten.OidcClientRequest,
+	jwks *jose.JSONWebKeySet,
+	overrideClientId string,
+) (*ClientRecord, error) {
 	if req.ClientName == "" {
-		return errors.New(InvalidClientName)
+		return nil, errors.New(InvalidClientName)
 	}
-	clientId := req.ClientName
+	var clientId string
+	if overrideClientId != "" {
+		clientId = overrideClientId
+	} else {
+		clientId = uuid.New().String()
+	}
 	_, ok := d.ClientIdIndex[clientId]
 	if ok {
-		return errors.New(ClientAlreadyExists)
+		return nil, errors.New(ClientAlreadyExists)
 	}
 
 	supplierOrg := SupplierOrgNo
@@ -91,7 +101,7 @@ func (d *Db) Insert(req *maskinporten.OidcClientRequest, jwks *jose.JSONWebKeySe
 	idx := len(d.Clients)
 	d.Clients = append(d.Clients, record)
 	d.ClientIdIndex[clientId] = idx
-	return nil
+	return &record, nil
 }
 
 func (d *Db) UpdateJwks(clientId string, jwks *jose.JSONWebKeySet) error {
@@ -115,6 +125,20 @@ func (d *Db) Delete(clientId string) bool {
 	d.Clients[i] = d.Clients[len(d.Clients)-1]
 	d.Clients = d.Clients[:len(d.Clients)-1]
 	return true
+}
+
+func (d *Db) Get(clientId string) *ClientRecord {
+	i, ok := d.ClientIdIndex[clientId]
+	if !ok {
+		return nil
+	}
+
+	client := &d.Clients[i]
+	if client.ClientId != clientId {
+		panic("inconsistent state")
+	}
+
+	return client
 }
 
 func (d *Db) Query(predicate func(*ClientRecord) bool) []ClientRecord {

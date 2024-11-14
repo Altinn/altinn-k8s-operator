@@ -8,7 +8,7 @@ import (
 
 func TryFindProjectRoot() string {
 	for {
-		if _, err := os.Stat("go.mod"); err == nil {
+		if fileExists("./go.mod") || fileExists("./*.env") {
 			currentDir, err := os.Getwd()
 			if err != nil {
 				return ""
@@ -20,6 +20,15 @@ func TryFindProjectRoot() string {
 			return ""
 		}
 	}
+}
+
+func fileExists(pattern string) bool {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return false
+	}
+
+	return len(matches) > 0
 }
 
 func GetConfigFilePathForEnv(env string) string {
