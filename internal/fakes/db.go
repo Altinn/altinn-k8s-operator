@@ -2,7 +2,6 @@ package fakes
 
 import (
 	"time"
-	"unsafe"
 
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	"github.com/go-errors/errors"
@@ -22,7 +21,7 @@ type Db struct {
 
 type ClientRecord struct {
 	ClientId string
-	Client   *maskinporten.OidcClientResponse
+	Client   *maskinporten.ClientResponse
 	Jwks     *jose.JSONWebKeySet
 }
 
@@ -34,11 +33,11 @@ func NewDb() *Db {
 }
 
 func (d *Db) Insert(
-	req *maskinporten.OidcClientRequest,
+	req *maskinporten.AddClientRequest,
 	jwks *jose.JSONWebKeySet,
 	overrideClientId string,
 ) (*ClientRecord, error) {
-	if req.ClientName == "" {
+	if req.ClientName == nil || *req.ClientName == "" {
 		return nil, errors.New(InvalidClientName)
 	}
 	var clientId string
@@ -56,7 +55,7 @@ func (d *Db) Insert(
 	now := time.Now()
 	active := true
 	jwksUri := ""
-	client := &maskinporten.OidcClientResponse{
+	client := &maskinporten.ClientResponse{
 		ClientId:                          clientId,
 		ClientName:                        req.ClientName,
 		LogoUri:                           req.LogoUri,
@@ -67,29 +66,22 @@ func (d *Db) Insert(
 		AuthorizationLifetime:             req.AuthorizationLifetime,
 		AccessTokenLifetime:               req.AccessTokenLifetime,
 		RefreshTokenLifetime:              req.RefreshTokenLifetime,
-		RefreshTokenUsage:                 (*maskinporten.OidcClientResponseRefreshTokenUsage)(req.RefreshTokenUsage),
+		RefreshTokenUsage:                 req.RefreshTokenUsage,
 		FrontchannelLogoutUri:             req.FrontchannelLogoutUri,
 		FrontchannelLogoutSessionRequired: req.FrontchannelLogoutSessionRequired,
-		TokenEndpointAuthMethod: (*maskinporten.OidcClientResponseTokenEndpointAuthMethod)(
-			req.TokenEndpointAuthMethod,
-		),
-		GrantTypes: *(*[]maskinporten.OidcClientResponseGrantTypesElem)(
-			unsafe.Pointer(&req.GrantTypes),
-		),
-		IntegrationType:      (*maskinporten.OidcClientResponseIntegrationType)(req.IntegrationType),
-		ApplicationType:      (*maskinporten.OidcClientResponseApplicationType)(req.ApplicationType),
-		SsoDisabled:          req.SsoDisabled,
-		CodeChallengeMethod:  (*maskinporten.OidcClientResponseCodeChallengeMethod)(req.CodeChallengeMethod),
-		ClientOrgName:        req.ClientOrgName,
-		ClientOrgDescription: req.ClientOrgDescription,
-		ClientLogoUri:        req.ClientLogoUri,
-		LastUpdated:          &now,
-		Created:              &now,
-		ClientSecret:         nil,
-		ClientOrgno:          *req.ClientOrgno,
-		SupplierOrgno:        &supplierOrg,
-		Active:               &active,
-		JwksUri:              &jwksUri,
+		TokenEndpointAuthMethod:           req.TokenEndpointAuthMethod,
+		GrantTypes:                        req.GrantTypes,
+		IntegrationType:                   req.IntegrationType,
+		ApplicationType:                   req.ApplicationType,
+		SsoDisabled:                       req.SsoDisabled,
+		CodeChallengeMethod:               req.CodeChallengeMethod,
+		LastUpdated:                       &now,
+		Created:                           &now,
+		ClientSecret:                      nil,
+		ClientOrgno:                       req.ClientOrgno,
+		SupplierOrgno:                     &supplierOrg,
+		Active:                            &active,
+		JwksUri:                           &jwksUri,
 	}
 
 	record := ClientRecord{

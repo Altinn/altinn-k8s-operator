@@ -128,14 +128,10 @@ kubectl apply -f https://raw.githubusercontent.com/<org>/altinn-k8s-operator/<ta
 
 ### JSON schema -> Go structs
 
-We can use [go-jsonschema](https://github.com/omissis/go-jsonschema)
-for generating structs based on JSON schemas.
-The `schemas` folder contains schemas extracted from the self service API OpenAPI doc (see link above):
+The Swagger UI is at: https://api.samarbeid.digdir.dev/swagger-ui/index.html#/
+OpenAPI spec at: https://api.samarbeid.digdir.dev/v3/api-docs/altinn-admin
 
-```sh
-go-jsonschema schemas/oidcClientResponse.json -o internal/maskinporten/oidc_client_response.go -p maskinporten --only-models -t
-go-jsonschema schemas/oidcClientRequest.json -o internal/maskinporten/oidc_client_request.go -p maskinporten -t
-```
+Download to `schemas/spec.json`, tell AI to write the models, update the client and fakes.
 
 ### Upgrading
 

@@ -44,7 +44,7 @@ type ClientState struct {
 
 type ApiState struct {
 	ClientId string
-	Req      *OidcClientRequest
+	Req      *AddClientRequest
 	Jwks     *jose.JSONWebKeySet
 }
 
@@ -103,7 +103,7 @@ func DeserializeSecretStateContent(secret *corev1.Secret) (*SecretStateContent, 
 
 func NewClientState(
 	crd *resourcesv1alpha1.MaskinportenClient,
-	api *OidcClientResponse,
+	api *ClientResponse,
 	apiJwks *jose.JSONWebKeySet,
 	secret *corev1.Secret,
 	secretStateContent *SecretStateContent,
@@ -141,7 +141,7 @@ func NewClientState(
 		}
 		state.Api = &ApiState{
 			ClientId: api.ClientId,
-			Req:      mapOidcClientResponseToRequest(api),
+			Req:      mapClientResponseToAddRequest(api),
 			Jwks:     apiJwks,
 		}
 	}
@@ -358,21 +358,23 @@ func GetClientName(context *operatorcontext.Context, appId string) string {
 	return getClientNamePrefix(context) + appId
 }
 
-func (s *ClientState) buildApiReq(context *operatorcontext.Context) *OidcClientRequest {
-	integrationType := OidcClientRequestIntegrationTypeMaskinporten
-	appType := OidcClientRequestApplicationTypeWeb
-	tokenEndpointMethod := OidcClientRequestTokenEndpointAuthMethodPrivateKeyJwt
-	return &OidcClientRequest{
-		ClientName: GetClientName(context, s.AppId),
-		Description: fmt.Sprintf(
-			"Altinn Operator managed client for %s/%s/%s",
-			context.ServiceOwnerName,
-			context.Environment,
-			s.AppId,
-		),
+func (s *ClientState) buildApiReq(context *operatorcontext.Context) *AddClientRequest {
+	integrationType := IntegrationTypeMaskinporten
+	appType := ApplicationTypeWeb
+	tokenEndpointMethod := TokenEndpointAuthMethodPrivateKeyJwt
+	clientName := GetClientName(context, s.AppId)
+	description := fmt.Sprintf(
+		"Altinn Operator managed client for %s/%s/%s",
+		context.ServiceOwnerName,
+		context.Environment,
+		s.AppId,
+	)
+	return &AddClientRequest{
+		ClientName:  &clientName,
+		Description: &description,
 		ClientOrgno: &context.ServiceOwnerOrgNo,
-		GrantTypes: []OidcClientRequestGrantTypesElem{
-			OidcClientRequestGrantTypesElemUrnIetfParamsOauthGrantTypeJwtBearer,
+		GrantTypes: []GrantType{
+			GrantTypeJwtBearer,
 		},
 		Scopes:                  s.Crd.Spec.Scopes,
 		IntegrationType:         &integrationType,
@@ -401,7 +403,7 @@ type CreateClientInApiCommand struct {
 	Api *ApiState
 }
 type CreateClientInApiCommandResponse struct {
-	Resp *OidcClientResponse
+	Resp *ClientResponse
 }
 type UpdateSecretContentCommand struct {
 	SecretContent *SecretStateContent
@@ -415,22 +417,49 @@ type DeleteClientInApiCommand struct {
 type DeleteSecretContentCommand struct {
 }
 
-func mapOidcClientResponseToRequest(api *OidcClientResponse) *OidcClientRequest {
-	grantTypes := make([]OidcClientRequestGrantTypesElem, len(api.GrantTypes))
+func mapClientResponseToAddRequest(api *ClientResponse) *AddClientRequest {
+	grantTypes := make([]GrantType, len(api.GrantTypes))
 	for i := 0; i < len(api.GrantTypes); i++ {
-		grantTypes[i] = (OidcClientRequestGrantTypesElem)(api.GrantTypes[i])
+		grantTypes[i] = api.GrantTypes[i]
 	}
-	req := &OidcClientRequest{
+	req := &AddClientRequest{
 		ClientName:              api.ClientName,
 		Description:             api.Description,
-		ClientOrgno:             &api.ClientOrgno,
+		ClientOrgno:             api.ClientOrgno,
 		GrantTypes:              grantTypes,
 		Scopes:                  api.Scopes,
-		IntegrationType:         (*OidcClientRequestIntegrationType)(api.IntegrationType),
-		ApplicationType:         (*OidcClientRequestApplicationType)(api.ApplicationType),
-		TokenEndpointAuthMethod: (*OidcClientRequestTokenEndpointAuthMethod)(api.TokenEndpointAuthMethod),
+		IntegrationType:         api.IntegrationType,
+		ApplicationType:         api.ApplicationType,
+		TokenEndpointAuthMethod: api.TokenEndpointAuthMethod,
 	}
 	return req
+}
+
+func ConvertAddRequestToUpdateRequest(req *AddClientRequest) *UpdateClientRequest {
+	return &UpdateClientRequest{
+		ClientId:                          req.ClientId,
+		ClientName:                        req.ClientName,
+		ClientOrgno:                       req.ClientOrgno,
+		SupplierOrgno:                     req.SupplierOrgno,
+		Description:                       req.Description,
+		Active:                            req.Active,
+		ApplicationType:                   req.ApplicationType,
+		IntegrationType:                   req.IntegrationType,
+		Scopes:                            req.Scopes,
+		GrantTypes:                        req.GrantTypes,
+		TokenEndpointAuthMethod:           req.TokenEndpointAuthMethod,
+		RefreshTokenLifetime:              req.RefreshTokenLifetime,
+		RefreshTokenUsage:                 req.RefreshTokenUsage,
+		AccessTokenLifetime:               req.AccessTokenLifetime,
+		AuthorizationLifetime:             req.AuthorizationLifetime,
+		LogoUri:                           req.LogoUri,
+		RedirectUris:                      req.RedirectUris,
+		PostLogoutRedirectUris:            req.PostLogoutRedirectUris,
+		FrontchannelLogoutSessionRequired: req.FrontchannelLogoutSessionRequired,
+		FrontchannelLogoutUri:             req.FrontchannelLogoutUri,
+		SsoDisabled:                       req.SsoDisabled,
+		CodeChallengeMethod:               req.CodeChallengeMethod,
+	}
 }
 
 func getPublicOnlyJwks(jwks *jose.JSONWebKeySet) (*jose.JSONWebKeySet, error) {

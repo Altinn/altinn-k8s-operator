@@ -31,6 +31,8 @@ const StateKey contextKey = "state"
 
 const POST = "POST"
 const GET = "GET"
+const PUT = "PUT"
+const DELETE = "DELETE"
 
 func main() {
 	log.SetOutput(os.Stdout)
@@ -264,7 +266,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		})
 
-		mux.HandleFunc("/clients", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/altinn/admin/clients", func(w http.ResponseWriter, r *http.Request) {
 			state := r.Context().Value(StateKey).(*fakes.State)
 			assert.Assert(state != nil)
 
@@ -278,7 +280,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
 				records := state.GetDb(r).Clients
-				clients := make([]*maskinporten.OidcClientResponse, len(records))
+				clients := make([]*maskinporten.ClientResponse, len(records))
 				for i, record := range records {
 					clients[i] = record.Client
 				}
@@ -295,7 +297,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 				}
 
 				decoder := json.NewDecoder(r.Body)
-				var client maskinporten.OidcClientRequest
+				var client maskinporten.AddClientRequest
 				err := decoder.Decode(&client)
 				if err != nil {
 					w.WriteHeader(400)
@@ -309,7 +311,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					return
 				}
 
-				w.WriteHeader(201)
+				w.WriteHeader(200)
 				w.Header().Add("Content-Type", "application/json")
 				encoder := json.NewEncoder(w)
 				err = encoder.Encode(clientRecord.Client)
@@ -329,7 +331,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		})
 
-		mux.HandleFunc("/clients/{clientId}", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}", func(w http.ResponseWriter, r *http.Request) {
 			state := r.Context().Value(StateKey).(*fakes.State)
 			assert.Assert(state != nil)
 
@@ -354,14 +356,14 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					w.WriteHeader(500)
 					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
 				}
-			case "PUT":
+			case PUT:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
 				}
 
 				decoder := json.NewDecoder(r.Body)
-				var client maskinporten.OidcClientRequest
+				var client maskinporten.UpdateClientRequest
 				err := decoder.Decode(&client)
 				if err != nil {
 					w.WriteHeader(400)
@@ -378,14 +380,48 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					)
 					return
 				}
-				_, err = state.GetDb(r).Insert(&client, nil, "")
+				// Convert UpdateClientRequest to AddClientRequest for the insert operation
+				addReq := &maskinporten.AddClientRequest{
+					ClientId:                          client.ClientId,
+					ClientName:                        client.ClientName,
+					ClientOrgno:                       client.ClientOrgno,
+					SupplierOrgno:                     client.SupplierOrgno,
+					Description:                       client.Description,
+					Active:                            client.Active,
+					ApplicationType:                   client.ApplicationType,
+					IntegrationType:                   client.IntegrationType,
+					Scopes:                            client.Scopes,
+					GrantTypes:                        client.GrantTypes,
+					TokenEndpointAuthMethod:           client.TokenEndpointAuthMethod,
+					RefreshTokenLifetime:              client.RefreshTokenLifetime,
+					RefreshTokenUsage:                 client.RefreshTokenUsage,
+					AccessTokenLifetime:               client.AccessTokenLifetime,
+					AuthorizationLifetime:             client.AuthorizationLifetime,
+					LogoUri:                           client.LogoUri,
+					RedirectUris:                      client.RedirectUris,
+					PostLogoutRedirectUris:            client.PostLogoutRedirectUris,
+					FrontchannelLogoutSessionRequired: client.FrontchannelLogoutSessionRequired,
+					FrontchannelLogoutUri:             client.FrontchannelLogoutUri,
+					SsoDisabled:                       client.SsoDisabled,
+					CodeChallengeMethod:               client.CodeChallengeMethod,
+				}
+				updatedRecord, err := state.GetDb(r).Insert(addReq, nil, clientId)
 				if err != nil {
 					w.WriteHeader(400)
 					log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
 					return
 				}
+
 				w.WriteHeader(200)
-			case "DELETE":
+				w.Header().Add("Content-Type", "application/json")
+				encoder := json.NewEncoder(w)
+				err = encoder.Encode(updatedRecord.Client)
+				if err != nil {
+					w.WriteHeader(500)
+					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+					return
+				}
+			case DELETE:
 				if auth(r) == nil {
 					w.WriteHeader(401)
 					return
@@ -401,7 +437,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		})
 
-		mux.HandleFunc("/clients/{clientId}/jwks", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}/jwks", func(w http.ResponseWriter, r *http.Request) {
 			state := r.Context().Value(StateKey).(*fakes.State)
 			assert.Assert(state != nil)
 

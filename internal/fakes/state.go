@@ -57,15 +57,16 @@ func (s *State) initDb() *Db {
 	}
 	publicJwk := jwk.Public()
 
-	integrationType := maskinporten.OidcClientRequestIntegrationTypeMaskinporten
-	appType := maskinporten.OidcClientRequestApplicationTypeWeb
-	tokenEndpointMethod := maskinporten.OidcClientRequestTokenEndpointAuthMethodPrivateKeyJwt
+	integrationType := maskinporten.IntegrationTypeMaskinporten
+	appType := maskinporten.ApplicationTypeWeb
+	tokenEndpointMethod := maskinporten.TokenEndpointAuthMethodPrivateKeyJwt
 	orgNo := "123456789"
-	_, err := db.Insert(&maskinporten.OidcClientRequest{
-		ClientName:  s.cfg.MaskinportenApi.ClientId,
+	clientName := s.cfg.MaskinportenApi.ClientId
+	_, err := db.Insert(&maskinporten.AddClientRequest{
+		ClientName:  &clientName,
 		ClientOrgno: &orgNo,
-		GrantTypes: []maskinporten.OidcClientRequestGrantTypesElem{
-			maskinporten.OidcClientRequestGrantTypesElemUrnIetfParamsOauthGrantTypeJwtBearer,
+		GrantTypes: []maskinporten.GrantType{
+			maskinporten.GrantTypeJwtBearer,
 		},
 		Scopes:                  []string{s.cfg.MaskinportenApi.Scope},
 		IntegrationType:         &integrationType,

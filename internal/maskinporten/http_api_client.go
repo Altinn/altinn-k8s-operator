@@ -117,11 +117,11 @@ func (c *HttpApiClient) GetWellKnownConfiguration(ctx context.Context) (*WellKno
 	return c.wellKnown.Get(ctx)
 }
 
-func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]OidcClientResponse, error) {
+func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]ClientResponse, error) {
 	ctx, span := c.tracer.Start(ctx, "GetAllClients")
 	defer span.End()
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients")
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients")
 
 	if err != nil {
 		return nil, err
@@ -138,15 +138,10 @@ func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]OidcClientResponse
 	}
 
 	if resp.StatusCode != 200 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		return nil, fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, body)
+		return nil, c.handleErrorResponse(resp)
 	}
 
-	dtos, err := deserialize[[]OidcClientResponse](resp)
+	dtos, err := deserialize[[]ClientResponse](resp)
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +150,13 @@ func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]OidcClientResponse
 		return nil, fmt.Errorf("no clients found")
 	}
 
-	result := make([]OidcClientResponse, 0, 16)
+	result := make([]ClientResponse, 0, 16)
 	for _, cl := range dtos {
-		clientName := strings.TrimPrefix(cl.ClientName, c.clientNamePrefix)
-		if clientName == cl.ClientName {
+		if cl.ClientName == nil {
+			continue
+		}
+		clientName := strings.TrimPrefix(*cl.ClientName, c.clientNamePrefix)
+		if clientName == *cl.ClientName {
 			continue
 		}
 
@@ -171,11 +169,11 @@ func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]OidcClientResponse
 func (c *HttpApiClient) GetClient(
 	ctx context.Context,
 	clientId string,
-) (*OidcClientResponse, *jose.JSONWebKeySet, error) {
+) (*ClientResponse, *jose.JSONWebKeySet, error) {
 	ctx, span := c.tracer.Start(ctx, "GetClient")
 	defer span.End()
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients", clientId)
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients", clientId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -192,22 +190,20 @@ func (c *HttpApiClient) GetClient(
 	}
 
 	if resp.StatusCode != 200 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, nil, errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		return nil, nil, fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, body)
+		return nil, nil, c.handleErrorResponse(resp)
 	}
 
-	dto, err := deserialize[OidcClientResponse](resp)
+	dto, err := deserialize[ClientResponse](resp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	clientName := strings.TrimPrefix(dto.ClientName, c.clientNamePrefix)
-	if clientName == dto.ClientName {
-		return nil, nil, errors.New(fmt.Errorf("unexpected client name: %s", dto.ClientName))
+	if dto.ClientName == nil {
+		return nil, nil, errors.New("client name is nil")
+	}
+	clientName := strings.TrimPrefix(*dto.ClientName, c.clientNamePrefix)
+	if clientName == *dto.ClientName {
+		return nil, nil, errors.New(fmt.Errorf("unexpected client name: %s", *dto.ClientName))
 	}
 
 	jwks, err := c.getClientJwks(ctx, clientId)
@@ -226,7 +222,7 @@ func (c *HttpApiClient) getClientJwks(ctx context.Context, clientId string) (*jo
 		return nil, errors.New("missing ID on client info")
 	}
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients", clientId, "jwks")
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients", clientId, "jwks")
 	if err != nil {
 		return nil, err
 	}
@@ -243,12 +239,7 @@ func (c *HttpApiClient) getClientJwks(ctx context.Context, clientId string) (*jo
 	}
 
 	if resp.StatusCode != 200 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		return nil, fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, body)
+		return nil, c.handleErrorResponse(resp)
 	}
 
 	jwks, err := deserialize[jose.JSONWebKeySet](resp)
@@ -263,9 +254,9 @@ var ErrFailedToCreateJwks = errors.Errorf("Created Maskinporten client, but fail
 
 func (c *HttpApiClient) CreateClient(
 	ctx context.Context,
-	client *OidcClientRequest,
+	client *AddClientRequest,
 	jwks *jose.JSONWebKeySet,
-) (*OidcClientResponse, error) {
+) (*ClientResponse, error) {
 	ctx, span := c.tracer.Start(ctx, "CreateClient")
 	defer span.End()
 
@@ -273,7 +264,7 @@ func (c *HttpApiClient) CreateClient(
 		return nil, errors.New("can't create maskinporten client without JWKS initialized")
 	}
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients")
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients")
 	if err != nil {
 		return nil, err
 	}
@@ -295,17 +286,11 @@ func (c *HttpApiClient) CreateClient(
 		return nil, err
 	}
 
-	if resp.StatusCode != 201 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		bodyString := string(body)
-		return nil, fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, bodyString)
+	if resp.StatusCode != 200 {
+		return nil, c.handleErrorResponse(resp)
 	}
 
-	result, err := deserialize[OidcClientResponse](resp)
+	result, err := deserialize[ClientResponse](resp)
 	if err != nil {
 		return nil, err
 	}
@@ -322,19 +307,23 @@ func (c *HttpApiClient) CreateClient(
 func (c *HttpApiClient) UpdateClient(
 	ctx context.Context,
 	clientId string,
-	client *OidcClientRequest,
-) (*OidcClientResponse, error) {
+	client *UpdateClientRequest,
+) (*ClientResponse, error) {
 	ctx, span := c.tracer.Start(ctx, "UpdateClient")
 	defer span.End()
 
 	if clientId == "" {
+		clientName := ""
+		if client.ClientName != nil {
+			clientName = *client.ClientName
+		}
 		return nil, errors.Errorf(
 			"tried to update maskinporten client with empty ID for client name: %s",
-			client.ClientName,
+			clientName,
 		)
 	}
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients", clientId)
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients", clientId)
 	if err != nil {
 		return nil, err
 	}
@@ -357,16 +346,10 @@ func (c *HttpApiClient) UpdateClient(
 	}
 
 	if resp.StatusCode != 200 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		bodyString := string(body)
-		return nil, fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, bodyString)
+		return nil, c.handleErrorResponse(resp)
 	}
 
-	dto, err := deserialize[OidcClientResponse](resp)
+	dto, err := deserialize[ClientResponse](resp)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +374,7 @@ func (c *HttpApiClient) CreateClientJwks(ctx context.Context, clientId string, j
 		}
 	}
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients", clientId, "jwks")
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients", clientId, "jwks")
 	if err != nil {
 		return err
 	}
@@ -407,19 +390,14 @@ func (c *HttpApiClient) CreateClientJwks(ctx context.Context, clientId string, j
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	resp, err := c.retryableHTTPDo(req)
 	if err != nil {
 		return err
 	}
 
 	if resp.StatusCode != 201 {
-		defer func() { _ = resp.Body.Close() }()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return errors.WrapPrefix(err, "error reading body on unexpected status", 0)
-		}
-		bodyString := string(body)
-		return fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, bodyString)
+		return c.handleErrorResponse(resp)
 	}
 
 	return nil
@@ -429,7 +407,7 @@ func (c *HttpApiClient) DeleteClient(ctx context.Context, clientId string) error
 	ctx, span := c.tracer.Start(ctx, "DeleteClient")
 	defer span.End()
 
-	url, err := url.JoinPath(c.config.SelfServiceUrl, "/clients", clientId)
+	url, err := url.JoinPath(c.config.SelfServiceUrl, "/api/v1/altinn/admin/clients", clientId)
 	if err != nil {
 		return err
 	}
@@ -444,16 +422,12 @@ func (c *HttpApiClient) DeleteClient(ctx context.Context, clientId string) error
 		return err
 	}
 
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return errors.WrapPrefix(err, "error reading body", 0)
-	}
-	bodyString := string(body)
-
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("unexpected status code: %d, body:\n%s", resp.StatusCode, bodyString)
+		return c.handleErrorResponse(resp)
 	}
+
+	// Close the response body for successful responses
+	defer func() { _ = resp.Body.Close() }()
 
 	return nil
 }
@@ -589,6 +563,42 @@ func deserialize[T any](resp *http.Response) (T, error) {
 	}
 
 	return result, err
+}
+
+// handleErrorResponse attempts to parse a structured API error response, falling back to raw body if parsing fails
+func (c *HttpApiClient) handleErrorResponse(resp *http.Response) error {
+	defer func() { _ = resp.Body.Close() }()
+
+	// Try to parse as structured API error response
+	var apiError ApiErrorResponse
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("HTTP %d: failed to read response body: %w", resp.StatusCode, err)
+	}
+
+	// Attempt to parse as structured error
+	if err := json.Unmarshal(body, &apiError); err == nil {
+		// Successfully parsed structured error
+		if apiError.Error != nil && *apiError.Error != "" {
+			correlationInfo := ""
+			if apiError.CorrelationId != nil && *apiError.CorrelationId != "" {
+				correlationInfo = fmt.Sprintf(" (correlation_id: %s)", *apiError.CorrelationId)
+			}
+			return fmt.Errorf("HTTP %d: %s%s", resp.StatusCode, *apiError.Error, correlationInfo)
+		}
+
+		// If no main error message, try error_description
+		if apiError.ErrorDescription != nil && *apiError.ErrorDescription != "" {
+			correlationInfo := ""
+			if apiError.CorrelationId != nil && *apiError.CorrelationId != "" {
+				correlationInfo = fmt.Sprintf(" (correlation_id: %s)", *apiError.CorrelationId)
+			}
+			return fmt.Errorf("HTTP %d: %s%s", resp.StatusCode, *apiError.ErrorDescription, correlationInfo)
+		}
+	}
+
+	// Fallback to raw body if structured parsing failed or no error message found
+	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 }
 
 // retryableHTTPDo performs an HTTP request with retry logic.

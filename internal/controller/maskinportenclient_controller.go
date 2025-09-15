@@ -297,7 +297,7 @@ func (r *MaskinportenClientReconciler) fetchCurrentState(
 		}
 	}
 
-	var client *maskinporten.OidcClientResponse
+	var client *maskinporten.ClientResponse
 	var jwks *jose.JSONWebKeySet
 	var secretStateContent *maskinporten.SecretStateContent
 
@@ -327,7 +327,7 @@ func (r *MaskinportenClientReconciler) fetchCurrentState(
 
 		clientName := maskinporten.GetClientName(r.runtime.GetOperatorContext(), req.AppId)
 		for _, c := range allClients {
-			if c.ClientName == clientName {
+			if c.ClientName != nil && *c.ClientName == clientName {
 				client, jwks, err = apiClient.GetClient(ctx, c.ClientId)
 				if err != nil {
 					return nil, err
@@ -379,7 +379,8 @@ func (r *MaskinportenClientReconciler) reconcile(
 			}
 		case *maskinporten.UpdateClientInApiCommand:
 			if data.Api.Req != nil {
-				_, err := apiClient.UpdateClient(ctx, data.Api.ClientId, data.Api.Req)
+				updateReq := maskinporten.ConvertAddRequestToUpdateRequest(data.Api.Req)
+				_, err := apiClient.UpdateClient(ctx, data.Api.ClientId, updateReq)
 				if err != nil {
 					return executedCommands, err
 				}
