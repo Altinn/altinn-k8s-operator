@@ -28,6 +28,9 @@ jobs:
       - name: Build
         run: make
 
+      - name: Install fakes
+        run: docker compose up -d --build
+
       - name: Test
         run: make test
 

@@ -29,6 +29,10 @@ Feel free to query existing issues before creating a new one.
 #### Run tests
 
 ```sh
+docker compose up -d --build # Make sure local fakes APIs are running
+
+make # build
+
 make test # runs local tests (doesn't need k8s etc)
 
 make test-e2e # runs e2e tests, requires kind

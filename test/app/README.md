@@ -1,6 +1,9 @@
 ## Test project to use with local cluster
 
 ```sh
+# Gets a local copy of altinn-studio-charts
+make download-charts
+
 # Creates cluster, installs CRDs
 make create
 # Installs test application (not the operator)

@@ -1,3 +1,15 @@
+CHARTS_BRANCH ?= feature/maskinporten-integration
+
+.PHONY: download-charts
+download-charts: ## Download altinn-studio-charts repository
+	@if [ ! -d "altinn-studio-charts" ]; then \
+		echo "Downloading altinn-studio-charts..."; \
+		git clone --depth 1 --branch $(CHARTS_BRANCH) https://github.com/Altinn/altinn-studio-charts.git ./altinn-studio-charts; \
+	else \
+		echo "Updating altinn-studio-charts..."; \
+		cd altinn-studio-charts && git pull origin $(CHARTS_BRANCH); \
+	fi
+
 .PHONY: create
 create: ## Initialize the test-application infra.
 	kind delete cluster --name operator

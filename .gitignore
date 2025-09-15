@@ -32,3 +32,6 @@ test/**/charts/
 
 *.env
 !local.env.sample
+
+# Downloaded charts
+test/app/altinn-studio-charts/
