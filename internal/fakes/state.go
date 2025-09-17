@@ -7,13 +7,13 @@ import (
 	"sync"
 
 	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
-	"github.com/go-jose/go-jose/v4"
 )
 
 type State struct {
 	Db   map[string]*Db
-	cfg  *config.Config
+	Cfg  *config.Config
 	lock sync.Mutex
 }
 
@@ -51,8 +51,8 @@ func (s *State) GetDb(req *http.Request) *Db {
 
 func (s *State) initDb() *Db {
 	db := NewDb()
-	jwk := jose.JSONWebKey{}
-	if err := json.Unmarshal([]byte(s.cfg.MaskinportenApi.Jwk), &jwk); err != nil {
+	jwk := crypto.Jwk{}
+	if err := json.Unmarshal([]byte(s.Cfg.MaskinportenApi.Jwk), &jwk); err != nil {
 		log.Fatalf("couldn't unmarshal JWK: %v", err)
 	}
 	publicJwk := jwk.Public()
@@ -60,19 +60,19 @@ func (s *State) initDb() *Db {
 	integrationType := maskinporten.IntegrationTypeMaskinporten
 	appType := maskinporten.ApplicationTypeWeb
 	tokenEndpointMethod := maskinporten.TokenEndpointAuthMethodPrivateKeyJwt
-	orgNo := "123456789"
-	clientName := s.cfg.MaskinportenApi.ClientId
+	orgNo := "991825827"
+	jwks := crypto.NewJwks(publicJwk)
 	_, err := db.Insert(&maskinporten.AddClientRequest{
-		ClientName:  &clientName,
+		ClientName:  &s.Cfg.MaskinportenApi.ClientId,
 		ClientOrgno: &orgNo,
 		GrantTypes: []maskinporten.GrantType{
 			maskinporten.GrantTypeJwtBearer,
 		},
-		Scopes:                  []string{s.cfg.MaskinportenApi.Scope},
+		Scopes:                  []string{s.Cfg.MaskinportenApi.Scope},
 		IntegrationType:         &integrationType,
 		ApplicationType:         &appType,
 		TokenEndpointAuthMethod: &tokenEndpointMethod,
-	}, &jose.JSONWebKeySet{Keys: []jose.JSONWebKey{publicJwk}}, s.cfg.MaskinportenApi.ClientId)
+	}, jwks, s.Cfg.MaskinportenApi.ClientId)
 	if err != nil {
 		log.Fatalf("couldn't insert supplier client: %v", err)
 	}
@@ -83,7 +83,7 @@ func (s *State) initDb() *Db {
 func NewState(cfg *config.Config) *State {
 	return &State{
 		Db:   make(map[string]*Db),
-		cfg:  cfg,
+		Cfg:  cfg,
 		lock: sync.Mutex{},
 	}
 }

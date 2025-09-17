@@ -21,9 +21,9 @@ import (
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	"github.com/altinn/altinn-k8s-operator/internal/assert"
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	rt "github.com/altinn/altinn-k8s-operator/internal/runtime"
-	"github.com/go-jose/go-jose/v4"
 )
 
 const JsonFileName = "maskinporten-settings.json"
@@ -191,7 +191,7 @@ func (r *MaskinportenClientReconciler) updateStatus(
 			instance.Status.Authority = data.SecretContent.Authority
 			instance.Status.KeyIds = make([]string, len(data.SecretContent.Jwks.Keys))
 			for i, key := range data.SecretContent.Jwks.Keys {
-				instance.Status.KeyIds[i] = key.KeyID
+				instance.Status.KeyIds[i] = key.KeyID()
 			}
 		case *maskinporten.DeleteSecretContentCommand:
 			instance.Status.Authority = ""
@@ -298,7 +298,7 @@ func (r *MaskinportenClientReconciler) fetchCurrentState(
 	}
 
 	var client *maskinporten.ClientResponse
-	var jwks *jose.JSONWebKeySet
+	var jwks *crypto.Jwks
 	var secretStateContent *maskinporten.SecretStateContent
 
 	if secret != nil {
@@ -355,7 +355,8 @@ func (r *MaskinportenClientReconciler) reconcile(
 	context := r.runtime.GetOperatorContext()
 	config := r.runtime.GetConfig()
 	crypto := r.runtime.GetCrypto()
-	commands, err := currentState.Reconcile(context, config, crypto)
+	clock := r.runtime.GetClock()
+	commands, err := currentState.Reconcile(context, config, crypto, clock)
 	if err != nil {
 		return nil, err
 	}

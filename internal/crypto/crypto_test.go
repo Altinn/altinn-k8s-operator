@@ -9,7 +9,6 @@ import (
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/altinn/altinn-k8s-operator/test/utils"
 	"github.com/gkampitakis/go-snaps/snaps"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/jonboulle/clockwork"
 	. "github.com/onsi/gomega"
 )
@@ -42,34 +41,34 @@ func TestRotateJwks(t *testing.T) {
 
 	// We have only just created the cert
 	clock.Advance(time.Hour * 1)
-	newJwks, err := service.RotateIfNeeded(appId, jwks)
+	newJwks, err := service.RotateIfNeeded(appId, getNotAfter(clock), jwks)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newJwks).To(BeNil())
 
 	// This should be before the rotation threshold
 	clock.Advance(time.Hour * 24 * 18)
-	newJwks, err = service.RotateIfNeeded(appId, jwks)
+	newJwks, err = service.RotateIfNeeded(appId, getNotAfter(clock), jwks)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newJwks).To(BeNil())
 
 	// Now we've advanced past the treshold and should have rotated
 	clock.Advance(time.Hour * 24 * 7)
-	newJwks, err = service.RotateIfNeeded(appId, jwks)
+	newJwks, err = service.RotateIfNeeded(appId, getNotAfter(clock), jwks)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newJwks).NotTo(BeNil())
 	g.Expect(newJwks.Keys).To(HaveLen(2))
-	oldCert := newJwks.Keys[1].Certificates[0]
-	newCert := newJwks.Keys[0].Certificates[0]
+	oldCert := newJwks.Keys[1].Certificates()[0]
+	newCert := newJwks.Keys[0].Certificates()[0]
 	g.Expect(newCert.NotAfter.After(oldCert.NotAfter)).To(BeTrue())
 
 	// We should rotate again
 	clock.Advance(time.Hour * 24 * 25)
-	newerJwks, err := service.RotateIfNeeded(appId, newJwks)
+	newerJwks, err := service.RotateIfNeeded(appId, getNotAfter(clock), newJwks)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newerJwks).NotTo(BeNil())
 	g.Expect(newerJwks.Keys).To(HaveLen(2))
-	newerCert := newerJwks.Keys[0].Certificates[0]
-	g.Expect(newerJwks.Keys[1].Certificates[0]).To(BeIdenticalTo(newCert))
+	newerCert := newerJwks.Keys[0].Certificates()[0]
+	g.Expect(newerJwks.Keys[1].Certificates()[0]).To(BeIdenticalTo(newCert))
 	g.Expect(newerCert.NotAfter.After(newCert.NotAfter)).To(BeTrue())
 
 	// Serialize the new JWKS
@@ -97,18 +96,55 @@ func TestGenerateCertSerialNumber(t *testing.T) {
 	snaps.MatchSnapshot(t, serial.String())
 }
 
+func TestPublicJwksConversion(t *testing.T) {
+	g := NewWithT(t)
+
+	jwks, _, _, err := createTestJwks()
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jwks).NotTo(BeNil())
+	g.Expect(jwks.Keys[0].Certificates()).NotTo(BeNil())
+
+	publicJwks, err := jwks.ToPublic()
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(publicJwks).NotTo(BeNil())
+	// Certificates is marshalled as "x5c", which Maskinporten doens't want
+	g.Expect(publicJwks.Keys[0].Certificates()).To(BeNil())
+	g.Expect(jwks.Keys[0].Certificates()).NotTo(BeNil())
+
+	jsonPayload, err := json.Marshal(publicJwks)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jsonPayload).NotTo(BeNil())
+	snaps.MatchJSON(t, jsonPayload)
+
+	jwk := jwks.Keys[0]
+	publicJwk := jwk.Public()
+	g.Expect(publicJwk.Certificates()).To(BeNil())
+	g.Expect(jwk.Certificates()).NotTo(BeNil())
+
+	jsonPayload, err = json.Marshal(publicJwk)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jsonPayload).NotTo(BeNil())
+	snaps.MatchJSON(t, jsonPayload)
+
+	// TODO: assert that private key fields are not present in JWK
+}
+
 func createService() (*CryptoService, clockwork.FakeClock) {
 	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
 	clock := clockwork.NewFakeClockAt(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	random := utils.NewDeterministicRand()
-	service := NewService(operatorContext, clock, random)
+	service := NewDefaultService(operatorContext, clock, random)
 	return service, clock
 }
 
-func createTestJwks() (*jose.JSONWebKeySet, *CryptoService, clockwork.FakeClock, error) {
+func getNotAfter(clock clockwork.Clock) time.Time {
+	return clock.Now().UTC().Add(time.Hour * 24 * 30)
+}
+
+func createTestJwks() (*Jwks, *CryptoService, clockwork.FakeClock, error) {
 	service, clock := createService()
 
-	jwks, err := service.CreateJwks(appId)
+	jwks, err := service.CreateJwks(appId, getNotAfter(clock))
 	if err != nil {
 		return nil, nil, nil, err
 	}

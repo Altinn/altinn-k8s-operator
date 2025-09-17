@@ -15,12 +15,10 @@ import (
 
 	"github.com/altinn/altinn-k8s-operator/internal/caching"
 	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/altinn/altinn-k8s-operator/internal/telemetry"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
-	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -50,11 +48,12 @@ type HttpApiClient struct {
 	config      *config.MaskinportenApiConfig
 	context     *operatorcontext.Context
 	client      http.Client
-	jwk         jose.JSONWebKey
+	jwk         crypto.Jwk
 	hydrated    bool
 	wellKnown   caching.CachedAtom[WellKnownResponse]
 	accessToken caching.CachedAtom[TokenResponse]
 	tracer      trace.Tracer
+	clock       clockwork.Clock
 
 	clientNamePrefix string
 }
@@ -64,7 +63,7 @@ func NewHttpApiClient(
 	context *operatorcontext.Context,
 	clock clockwork.Clock,
 ) (*HttpApiClient, error) {
-	jwk := jose.JSONWebKey{}
+	jwk := crypto.Jwk{}
 	if err := json.Unmarshal([]byte(config.Jwk), &jwk); err != nil {
 		return nil, err
 	}
@@ -76,6 +75,7 @@ func NewHttpApiClient(
 		jwk:      jwk,
 		hydrated: false,
 		tracer:   otel.Tracer(telemetry.ServiceName),
+		clock:    clock,
 
 		clientNamePrefix: getClientNamePrefix(context),
 	}
@@ -115,6 +115,13 @@ func (c *HttpApiClient) GetWellKnownConfiguration(ctx context.Context) (*WellKno
 	defer span.End()
 
 	return c.wellKnown.Get(ctx)
+}
+
+func (c *HttpApiClient) GetAccessToken(ctx context.Context) (*TokenResponse, error) {
+	ctx, span := c.tracer.Start(ctx, "GetAccessToken")
+	defer span.End()
+
+	return c.accessToken.Get(ctx)
 }
 
 func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]ClientResponse, error) {
@@ -169,7 +176,7 @@ func (c *HttpApiClient) GetAllClients(ctx context.Context) ([]ClientResponse, er
 func (c *HttpApiClient) GetClient(
 	ctx context.Context,
 	clientId string,
-) (*ClientResponse, *jose.JSONWebKeySet, error) {
+) (*ClientResponse, *crypto.Jwks, error) {
 	ctx, span := c.tracer.Start(ctx, "GetClient")
 	defer span.End()
 
@@ -214,7 +221,7 @@ func (c *HttpApiClient) GetClient(
 	return &dto, jwks, nil
 }
 
-func (c *HttpApiClient) getClientJwks(ctx context.Context, clientId string) (*jose.JSONWebKeySet, error) {
+func (c *HttpApiClient) getClientJwks(ctx context.Context, clientId string) (*crypto.Jwks, error) {
 	ctx, span := c.tracer.Start(ctx, "GetClientJwks")
 	defer span.End()
 
@@ -242,7 +249,7 @@ func (c *HttpApiClient) getClientJwks(ctx context.Context, clientId string) (*jo
 		return nil, c.handleErrorResponse(resp)
 	}
 
-	jwks, err := deserialize[jose.JSONWebKeySet](resp)
+	jwks, err := deserialize[crypto.Jwks](resp)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +262,7 @@ var ErrFailedToCreateJwks = errors.Errorf("Created Maskinporten client, but fail
 func (c *HttpApiClient) CreateClient(
 	ctx context.Context,
 	client *AddClientRequest,
-	jwks *jose.JSONWebKeySet,
+	jwks *crypto.Jwks,
 ) (*ClientResponse, error) {
 	ctx, span := c.tracer.Start(ctx, "CreateClient")
 	defer span.End()
@@ -357,7 +364,7 @@ func (c *HttpApiClient) UpdateClient(
 	return &dto, nil
 }
 
-func (c *HttpApiClient) CreateClientJwks(ctx context.Context, clientId string, jwks *jose.JSONWebKeySet) error {
+func (c *HttpApiClient) CreateClientJwks(ctx context.Context, clientId string, jwks *crypto.Jwks) error {
 	ctx, span := c.tracer.Start(ctx, "CreateClientJwks")
 	defer span.End()
 
@@ -438,33 +445,15 @@ func (c *HttpApiClient) createGrant(ctx context.Context) (*string, error) {
 		return nil, err
 	}
 
-	exp := time.Now().Add(60 * time.Second)
-	issuedAt := time.Now()
+	exp := c.clock.Now().Add(60 * time.Second)
 
-	pubClaims := jwt.Claims{
-		Audience:  []string{wellKnown.Issuer},
-		Issuer:    c.config.ClientId,
-		IssuedAt:  jwt.NewNumericDate(issuedAt),
-		NotBefore: jwt.NewNumericDate(issuedAt),
-		Expiry:    jwt.NewNumericDate(exp),
-		ID:        uuid.New().String(),
-	}
-
-	privClaims := struct {
-		Scope string `json:"scope"`
-	}{
-		Scope: c.config.Scope,
-	}
-
-	signer, err := jose.NewSigner(
-		jose.SigningKey{Algorithm: jose.RS256, Key: c.jwk},
-		(&jose.SignerOptions{}).WithType("JWT"),
+	signedToken, err := c.jwk.NewJWT(
+		[]string{wellKnown.Issuer},
+		c.config.ClientId,
+		c.config.Scope,
+		exp,
+		c.clock,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	signedToken, err := jwt.Signed(signer).Claims(pubClaims).Claims(privClaims).Serialize()
 	if err != nil {
 		return nil, err
 	}
@@ -502,8 +491,7 @@ func (c *HttpApiClient) accessTokenFetcher(ctx context.Context) (*TokenResponse,
 	}
 
 	if resp.StatusCode != 200 {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, c.handleErrorResponse(resp)
 	}
 
 	tokenResp, err := deserialize[TokenResponse](resp)
@@ -538,8 +526,7 @@ func (c *HttpApiClient) wellKnownFetcher(ctx context.Context) (*WellKnownRespons
 	}
 
 	if resp.StatusCode != 200 {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, c.handleErrorResponse(resp)
 	}
 
 	wellKnownResp, err := deserialize[WellKnownResponse](resp)
@@ -570,31 +557,10 @@ func (c *HttpApiClient) handleErrorResponse(resp *http.Response) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	// Try to parse as structured API error response
-	var apiError ApiErrorResponse
+	// var apiError ApiErrorResponse
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("HTTP %d: failed to read response body: %w", resp.StatusCode, err)
-	}
-
-	// Attempt to parse as structured error
-	if err := json.Unmarshal(body, &apiError); err == nil {
-		// Successfully parsed structured error
-		if apiError.Error != nil && *apiError.Error != "" {
-			correlationInfo := ""
-			if apiError.CorrelationId != nil && *apiError.CorrelationId != "" {
-				correlationInfo = fmt.Sprintf(" (correlation_id: %s)", *apiError.CorrelationId)
-			}
-			return fmt.Errorf("HTTP %d: %s%s", resp.StatusCode, *apiError.Error, correlationInfo)
-		}
-
-		// If no main error message, try error_description
-		if apiError.ErrorDescription != nil && *apiError.ErrorDescription != "" {
-			correlationInfo := ""
-			if apiError.CorrelationId != nil && *apiError.CorrelationId != "" {
-				correlationInfo = fmt.Sprintf(" (correlation_id: %s)", *apiError.CorrelationId)
-			}
-			return fmt.Errorf("HTTP %d: %s%s", resp.StatusCode, *apiError.ErrorDescription, correlationInfo)
-		}
 	}
 
 	// Fallback to raw body if structured parsing failed or no error message found

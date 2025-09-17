@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	"github.com/altinn/altinn-k8s-operator/internal/config"
 	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
 	"github.com/go-errors/errors"
-	"github.com/go-jose/go-jose/v4"
+	"github.com/jonboulle/clockwork"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -45,7 +46,7 @@ type ClientState struct {
 type ApiState struct {
 	ClientId string
 	Req      *AddClientRequest
-	Jwks     *jose.JSONWebKeySet
+	Jwks     *crypto.Jwks
 }
 
 type SecretState struct {
@@ -54,10 +55,10 @@ type SecretState struct {
 }
 
 type SecretStateContent struct {
-	ClientId  string              `json:"clientId"`
-	Authority string              `json:"authority"`
-	Jwks      *jose.JSONWebKeySet `json:"jwks"`
-	Jwk       *jose.JSONWebKey    `json:"jwk"`
+	ClientId  string       `json:"clientId"`
+	Authority string       `json:"authority"`
+	Jwks      *crypto.Jwks `json:"jwks"`
+	Jwk       *crypto.Jwk  `json:"jwk"`
 }
 
 func (c *SecretStateContent) SerializeTo(secret *corev1.Secret) error {
@@ -104,7 +105,7 @@ func DeserializeSecretStateContent(secret *corev1.Secret) (*SecretStateContent, 
 func NewClientState(
 	crd *resourcesv1alpha1.MaskinportenClient,
 	api *ClientResponse,
-	apiJwks *jose.JSONWebKeySet,
+	apiJwks *crypto.Jwks,
 	secret *corev1.Secret,
 	secretStateContent *SecretStateContent,
 ) (*ClientState, error) {
@@ -149,10 +150,15 @@ func NewClientState(
 	return state, nil
 }
 
+func (s *ClientState) getNotAfter(clock clockwork.Clock) time.Time {
+	return clock.Now().UTC().Add(time.Hour * 24 * 30)
+}
+
 func (s *ClientState) Reconcile(
 	context *operatorcontext.Context,
 	config *config.Config,
 	crypto *crypto.CryptoService,
+	clock clockwork.Clock,
 ) (CommandList, error) {
 	// ClientState keeps the state of Maskinporten-related config
 	// related to a specific app. This function evalues current state,
@@ -208,11 +214,11 @@ func (s *ClientState) Reconcile(
 		// There may be the case that the `api` resource is null,
 		// but the secret output exists, in which case we just overwrite it
 		req := s.buildApiReq(context)
-		jwks, err := crypto.CreateJwks(s.AppId)
+		jwks, err := crypto.CreateJwks(s.AppId, s.getNotAfter(clock))
 		if err != nil {
 			return nil, err
 		}
-		publicJwks, err := getPublicOnlyJwks(jwks)
+		publicJwks, err := jwks.ToPublic()
 		if err != nil {
 			return nil, err
 		}
@@ -225,7 +231,7 @@ func (s *ClientState) Reconcile(
 			ClientId:  "", // set via the callback below
 			Authority: config.MaskinportenApi.AuthorityUrl,
 			Jwks:      jwks,
-			Jwk:       &jwks.Keys[0],
+			Jwk:       jwks.Keys[0],
 		}
 		commands = append(commands, Command{
 			Data: &CreateClientInApiCommand{
@@ -251,11 +257,11 @@ func (s *ClientState) Reconcile(
 			// * Someone else created the API client
 
 			// Since the private JWKS is stored in the secret, it has been lost and we need to create a new one
-			jwks, err := crypto.CreateJwks(s.AppId)
+			jwks, err := crypto.CreateJwks(s.AppId, s.getNotAfter(clock))
 			if err != nil {
 				return nil, err
 			}
-			publicJwks, err := getPublicOnlyJwks(jwks)
+			publicJwks, err := jwks.ToPublic()
 			if err != nil {
 				return nil, err
 			}
@@ -273,7 +279,7 @@ func (s *ClientState) Reconcile(
 				ClientId:  s.Api.ClientId,
 				Authority: config.MaskinportenApi.AuthorityUrl,
 				Jwks:      jwks,
-				Jwk:       &jwks.Keys[0],
+				Jwk:       jwks.Keys[0],
 			}
 			commands = append(commands, Command{
 				Data: &UpdateSecretContentCommand{
@@ -284,7 +290,7 @@ func (s *ClientState) Reconcile(
 		} else {
 			authorityChanged := config.MaskinportenApi.AuthorityUrl != s.Secret.Content.Authority
 			scopesChanged := !reflect.DeepEqual(s.Crd.Spec.Scopes, s.Api.Req.Scopes)
-			jwks, err := crypto.RotateIfNeeded(s.AppId, s.Secret.Content.Jwks)
+			jwks, err := crypto.RotateIfNeeded(s.AppId, s.getNotAfter(clock), s.Secret.Content.Jwks)
 			if err != nil {
 				return nil, err
 			}
@@ -300,7 +306,7 @@ func (s *ClientState) Reconcile(
 					ClientId:  s.Api.ClientId,
 					Authority: config.MaskinportenApi.AuthorityUrl,
 					Jwks:      jwks,
-					Jwk:       &jwks.Keys[0],
+					Jwk:       jwks.Keys[0],
 				}
 				commands = append(commands, Command{
 					// TODO: what happens if we succeed in updating the secret but fail in updating the client in API?
@@ -314,7 +320,7 @@ func (s *ClientState) Reconcile(
 
 			// Handle client JWKS endpoint state changes
 			if jwksChanged {
-				publicJwks, err := getPublicOnlyJwks(jwks)
+				publicJwks, err := jwks.ToPublic()
 				if err != nil {
 					return nil, err
 				}
@@ -460,25 +466,4 @@ func ConvertAddRequestToUpdateRequest(req *AddClientRequest) *UpdateClientReques
 		SsoDisabled:                       req.SsoDisabled,
 		CodeChallengeMethod:               req.CodeChallengeMethod,
 	}
-}
-
-func getPublicOnlyJwks(jwks *jose.JSONWebKeySet) (*jose.JSONWebKeySet, error) {
-	if jwks == nil {
-		return nil, errors.New("can't create public keyset from JWKS when it is not initialized")
-	}
-
-	result := &jose.JSONWebKeySet{}
-	result.Keys = make([]jose.JSONWebKey, 0, len(jwks.Keys))
-	for _, jwk := range jwks.Keys {
-		if jwk.IsPublic() {
-			return nil, errors.New("keys in client info must be based on private/public key pairs")
-		}
-		key := jwk.Public()
-		// We set certificates to nil here because Maskinporten doesn't want the 'x5c' field
-		// which is marshalled from the Certificates field on the struct.
-		key.Certificates = nil
-		result.Keys = append(result.Keys, key)
-	}
-
-	return result, nil
 }

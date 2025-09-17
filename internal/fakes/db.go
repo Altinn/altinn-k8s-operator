@@ -3,9 +3,9 @@ package fakes
 import (
 	"time"
 
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	"github.com/go-errors/errors"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 )
 
@@ -22,7 +22,7 @@ type Db struct {
 type ClientRecord struct {
 	ClientId string
 	Client   *maskinporten.ClientResponse
-	Jwks     *jose.JSONWebKeySet
+	Jwks     *crypto.Jwks
 }
 
 func NewDb() *Db {
@@ -34,7 +34,7 @@ func NewDb() *Db {
 
 func (d *Db) Insert(
 	req *maskinporten.AddClientRequest,
-	jwks *jose.JSONWebKeySet,
+	jwks *crypto.Jwks,
 	overrideClientId string,
 ) (*ClientRecord, error) {
 	if req.ClientName == nil || *req.ClientName == "" {
@@ -96,7 +96,7 @@ func (d *Db) Insert(
 	return &record, nil
 }
 
-func (d *Db) UpdateJwks(clientId string, jwks *jose.JSONWebKeySet) error {
+func (d *Db) UpdateJwks(clientId string, jwks *crypto.Jwks) error {
 	i, ok := d.ClientIdIndex[clientId]
 	if !ok {
 		return errors.New("client not found")

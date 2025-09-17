@@ -1,8 +1,9 @@
 package maskinporten
 
 import (
-	"github.com/go-jose/go-jose/v4"
 	"time"
+
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 )
 
 // ClientResponse represents the response when retrieving or creating a client
@@ -59,7 +60,7 @@ type ClientResponse struct {
 	// Secret kan ikke settes direkte. Secret blir generert ved behov og dette feltet er kun for retur av secret
 	ClientSecret *string `json:"client_secret,omitempty"`
 
-	Jwks *jose.JSONWebKeySet `json:"jwks,omitempty"`
+	Jwks *crypto.Jwks `json:"jwks,omitempty"`
 
 	// Uri til JWKS om satt. Kan kun leses ut, ikke settes.
 	JwksUri *string `json:"jwks_uri,omitempty"`
@@ -110,7 +111,7 @@ type ClientOnBehalfOf struct {
 }
 
 // OidcJwksRequestResponse represents JWKS request/response
-type OidcJwksRequestResponse = jose.JSONWebKeySet
+type OidcJwksRequestResponse = crypto.Jwks
 
 // ApiError represents a single specific error
 type ApiError struct {

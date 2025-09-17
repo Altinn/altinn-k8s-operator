@@ -23,6 +23,7 @@ type runtime struct {
 	maskinportenApiClient *maskinporten.HttpApiClient
 	tracer                trace.Tracer
 	meter                 metric.Meter
+	clock                 clockwork.Clock
 }
 
 var _ rt.Runtime = (*runtime)(nil)
@@ -49,7 +50,11 @@ func NewRuntime(ctx context.Context, env string) (rt.Runtime, error) {
 
 	cryptoRand := crand.Reader
 
-	crypto := crypto.NewService(operatorContext, clock, cryptoRand)
+	crypto := crypto.NewDefaultService(
+		operatorContext,
+		clock,
+		cryptoRand,
+	)
 
 	maskinportenApiClient, err := maskinporten.NewHttpApiClient(&cfg.MaskinportenApi, operatorContext, clock)
 	if err != nil {
@@ -63,6 +68,7 @@ func NewRuntime(ctx context.Context, env string) (rt.Runtime, error) {
 		maskinportenApiClient: maskinportenApiClient,
 		tracer:                tracer,
 		meter:                 otel.Meter(telemetry.ServiceName),
+		clock:                 clock,
 	}
 
 	return rt, nil
@@ -78,6 +84,10 @@ func (r *runtime) GetOperatorContext() *operatorcontext.Context {
 
 func (r *runtime) GetCrypto() *crypto.CryptoService {
 	return &r.crypto
+}
+
+func (r *runtime) GetClock() clockwork.Clock {
+	return r.clock
 }
 
 func (r *runtime) GetMaskinportenApiClient() *maskinporten.HttpApiClient {

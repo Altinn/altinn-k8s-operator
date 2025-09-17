@@ -10,16 +10,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/go-errors/errors"
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
 
 	"github.com/altinn/altinn-k8s-operator/internal/assert"
 	"github.com/altinn/altinn-k8s-operator/internal/config"
+	"github.com/altinn/altinn-k8s-operator/internal/crypto"
 	"github.com/altinn/altinn-k8s-operator/internal/fakes"
 	"github.com/altinn/altinn-k8s-operator/internal/maskinporten"
 	"github.com/altinn/altinn-k8s-operator/internal/operatorcontext"
@@ -113,20 +113,15 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			}
 
-			jwtToken, err := jwt.ParseSigned(assertion, []jose.SignatureAlgorithm{jose.RS256})
+			jwt, err := crypto.ParseJWT(assertion)
 			if err != nil {
 				w.WriteHeader(400)
 				log.Printf("couldn't parse JWT: %v\n", errors.Wrap(err, 0))
 				return
 			}
-			if len(jwtToken.Headers) != 1 {
-				w.WriteHeader(400)
-				log.Printf("expected exactly one header, got %d\n", len(jwtToken.Headers))
-				return
-			}
 
-			header := jwtToken.Headers[0]
-			if header.KeyID == "" {
+			keyID := jwt.KeyID()
+			if keyID == "" {
 				w.WriteHeader(400)
 				log.Printf("missing kid\n")
 				return
@@ -137,7 +132,7 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 					return false
 				}
 				for _, jwk := range ocr.Jwks.Keys {
-					if jwk.KeyID == header.KeyID {
+					if jwk.KeyID() == keyID {
 						return true
 					}
 				}
@@ -145,13 +140,13 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 			})
 			if len(clients) != 1 {
 				w.WriteHeader(400)
-				log.Printf("client not found: %s\n", header.KeyID)
+				log.Printf("client not found: %s\n", keyID)
 				return
 			}
 			client := clients[0]
 
-			claims := jwt.Claims{}
-			if err := jwtToken.Claims(client.Jwks.Keys[0], &claims); err != nil {
+			claims, err := jwt.DecodeClaims(client.Jwks.Keys[0])
+			if err != nil {
 				w.WriteHeader(400)
 				log.Printf("couldn't validate JWT: %v\n", errors.Wrap(err, 0))
 				return
@@ -168,11 +163,25 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 				log.Printf("invalid issuer: %s\n", clientId)
 				return
 			}
+			if claims.Scope == "" {
+				w.WriteHeader(400)
+				log.Printf("missing scope\n")
+				return
+			}
+			requestedScopes := strings.Fields(claims.Scope)
+			for _, scope := range requestedScopes {
+				hasAccessToScope := slices.Contains(client.Client.Scopes, scope)
+				if !hasAccessToScope {
+					w.WriteHeader(400)
+					log.Printf("client doesn't have access to scope: %s\n", scope)
+					return
+				}
+			}
 
 			w.Header().Add("Content-Type", "application/json")
 
 			fakeToken := FakeToken{
-				Scopes:   client.Client.Scopes,
+				Scopes:   requestedScopes,
 				ClientId: client.ClientId,
 			}
 			tokenJson, err := json.Marshal(fakeToken)
@@ -187,8 +196,8 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 			err = encoder.Encode(maskinporten.TokenResponse{
 				AccessToken: base64Token,
 				TokenType:   "Bearer",
-				Scope:       strings.Join(client.Client.Scopes, " "),
-				ExpiresIn:   20,
+				Scope:       strings.Join(requestedScopes, " "),
+				ExpiresIn:   120,
 			})
 			if err != nil {
 				w.WriteHeader(500)
@@ -208,7 +217,7 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 				JwksURI:                           "http://localhost:8050/jwks",
 				TokenEndpointAuthMethodsSupported: []string{"private_key_jwt"},
 				GrantTypesSupported:               []string{"urn:ietf:params:oauth:grant-type:jwt-bearer"},
-				TokenEndpointAuthSigningAlgValuesSupported: []string{"RS256", "RS384", "RS512"},
+				TokenEndpointAuthSigningAlgValuesSupported: crypto.SignatureAlgorithmsStr,
 			})
 			if err != nil {
 				w.WriteHeader(500)
@@ -244,8 +253,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 			return nil
 		}
 
-		clientId := r.PathValue("clientId")
-		if clientId != "" && clientId != token.ClientId && token.ClientId != "altinn_apps_supplier_client" {
+		if !slices.Contains(token.Scopes, "idporten:dcr.altinn") {
 			return nil
 		}
 
@@ -304,6 +312,13 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
 					return
 				}
+
+				if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
+					w.WriteHeader(400)
+					log.Printf("clients cannot request idporten:dcr.altinn scope\n")
+					return
+				}
+
 				clientRecord, err := state.GetDb(r).Insert(&client, nil, "")
 				if err != nil {
 					w.WriteHeader(400)
@@ -368,6 +383,12 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 				if err != nil {
 					w.WriteHeader(400)
 					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
+					return
+				}
+
+				if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
+					w.WriteHeader(400)
+					log.Printf("clients cannot request idporten:dcr.altinn scope\n")
 					return
 				}
 
@@ -471,7 +492,7 @@ func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 				}
 
 				decoder := json.NewDecoder(r.Body)
-				var jwks jose.JSONWebKeySet
+				var jwks crypto.Jwks
 				err := decoder.Decode(&jwks)
 				if err != nil {
 					w.WriteHeader(400)
