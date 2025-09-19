@@ -425,9 +425,7 @@ type DeleteSecretContentCommand struct {
 
 func mapClientResponseToAddRequest(api *ClientResponse) *AddClientRequest {
 	grantTypes := make([]GrantType, len(api.GrantTypes))
-	for i := 0; i < len(api.GrantTypes); i++ {
-		grantTypes[i] = api.GrantTypes[i]
-	}
+	copy(grantTypes, api.GrantTypes)
 	req := &AddClientRequest{
 		ClientName:              api.ClientName,
 		Description:             api.Description,

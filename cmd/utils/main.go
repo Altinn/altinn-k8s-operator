@@ -33,13 +33,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: %s get <subcommand> [options]\n", os.Args[0])
 			fmt.Fprintf(os.Stderr, "Subcommands:\n")
 			fmt.Fprintf(os.Stderr, "  token    Get a Maskinporten access token\n")
+			fmt.Fprintf(os.Stderr, "  clients  List Maskinporten clients\n")
 			os.Exit(1)
 		}
 
 		subcommand := os.Args[2]
-		if subcommand == "token" {
+		switch subcommand {
+		case "token":
 			getToken()
-		} else {
+		case "clients":
+			getClients()
+		default:
 			fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
 			os.Exit(1)
 		}
@@ -47,14 +51,31 @@ func main() {
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s create <subcommand> [options]\n", os.Args[0])
 			fmt.Fprintf(os.Stderr, "Subcommands:\n")
-			fmt.Fprintf(os.Stderr, "  jwk    Create a JSON Web Key Set\n")
+			fmt.Fprintf(os.Stderr, "  jwk     Create a JSON Web Key Set\n")
 			os.Exit(1)
 		}
 
 		subcommand := os.Args[2]
-		if subcommand == "jwk" {
+		switch subcommand {
+		case "jwk":
 			createJwk()
-		} else {
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
+			os.Exit(1)
+		}
+	case "delete":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s delete <subcommand> [options]\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Subcommands:\n")
+			fmt.Fprintf(os.Stderr, "  client  Delete a Maskinporten client\n")
+			os.Exit(1)
+		}
+
+		subcommand := os.Args[2]
+		switch subcommand {
+		case "client":
+			deleteClient()
+		default:
 			fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
 			os.Exit(1)
 		}
@@ -73,7 +94,11 @@ func getToken() {
 	fs.BoolVar(&verbose, "verbose", false, "Print configuration information to stderr")
 
 	// Parse remaining args (skip program name, "get", "token")
-	fs.Parse(os.Args[3:])
+	err := fs.Parse(os.Args[3:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	ctx := context.Background()
 
@@ -120,6 +145,126 @@ func getToken() {
 	fmt.Println(tokenResponse.AccessToken)
 }
 
+func getClients() {
+	fs := flag.NewFlagSet("get clients", flag.ExitOnError)
+	var envFile string
+	var verbose bool
+	var pretty bool
+	fs.StringVar(&envFile, "env", "dev.env", "Environment file to load configuration from")
+	fs.BoolVar(&verbose, "verbose", false, "Print configuration information to stderr")
+	fs.BoolVar(&pretty, "pretty", false, "Format JSON output with indentation")
+
+	err := fs.Parse(os.Args[3:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cfg, client, err := setupMaskinportenClient(envFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Configuration loaded from: %s\n", envFile)
+		fmt.Fprintf(os.Stderr, "Self Service URL: %s\n", cfg.MaskinportenApi.SelfServiceUrl)
+		fmt.Fprintf(os.Stderr, "---\n")
+	}
+
+	clients, err := client.GetAllClients(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get clients: %v\n", err)
+		os.Exit(1)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Clients fetched: %d\n", len(clients))
+		fmt.Fprintf(os.Stderr, "---\n")
+	}
+
+	var output []byte
+	if pretty {
+		output, err = json.MarshalIndent(clients, "", "  ")
+	} else {
+		output, err = json.Marshal(clients)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to marshal clients to JSON: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(string(output))
+}
+
+func deleteClient() {
+	fs := flag.NewFlagSet("delete client", flag.ExitOnError)
+	var envFile string
+	var clientID string
+	var verbose bool
+	fs.StringVar(&envFile, "env", "dev.env", "Environment file to load configuration from")
+	fs.StringVar(&clientID, "client-id", "", "Maskinporten client ID to delete")
+	fs.BoolVar(&verbose, "verbose", false, "Print configuration information to stderr")
+
+	err := fs.Parse(os.Args[3:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	if clientID == "" {
+		fmt.Fprintf(os.Stderr, "--client-id flag is required\n")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	ctx, cfg, client, err := setupMaskinportenClient(envFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Configuration loaded from: %s\n", envFile)
+		fmt.Fprintf(os.Stderr, "Self Service URL: %s\n", cfg.MaskinportenApi.SelfServiceUrl)
+		fmt.Fprintf(os.Stderr, "Deleting client ID: %s\n", clientID)
+		fmt.Fprintf(os.Stderr, "---\n")
+	}
+
+	if err := client.DeleteClient(ctx, clientID); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to delete client: %v\n", err)
+		os.Exit(1)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Client deleted: %s\n", clientID)
+	}
+
+	fmt.Println(clientID)
+}
+
+func setupMaskinportenClient(envFile string) (context.Context, *config.Config, *maskinporten.HttpApiClient, error) {
+	ctx := context.Background()
+
+	operatorCtx, err := operatorcontext.Discover(ctx)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to discover operator context: %w", err)
+	}
+
+	cfg, err := config.GetConfig(operatorCtx, config.ConfigSourceKoanf, envFile)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load config from %s: %w", envFile, err)
+	}
+
+	clock := clockwork.NewRealClock()
+	client, err := maskinporten.NewHttpApiClient(&cfg.MaskinportenApi, operatorCtx, clock)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create Maskinporten client: %w", err)
+	}
+
+	return ctx, cfg, client, nil
+}
+
 func createJwk() {
 	// Create a new flag set for the create jwk subcommand
 	fs := flag.NewFlagSet("create jwk", flag.ExitOnError)
@@ -138,11 +283,14 @@ func createJwk() {
 	fs.BoolVar(&pretty, "pretty", false, "Format JSON output with indentation")
 
 	// Parse remaining args (skip program name, "create", "jwk")
-	fs.Parse(os.Args[3:])
+	err := fs.Parse(os.Args[3:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Parse the notAfter time
 	var notAfter time.Time
-	var err error
 	if notAfterStr == "" {
 		// Default to 1 year from now
 		notAfter = time.Now().Add(time.Hour * 24 * 365)

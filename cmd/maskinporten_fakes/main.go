@@ -227,295 +227,299 @@ func runMaskinportenApi(ctx context.Context, wg *sync.WaitGroup) {
 	})
 }
 
+func selfServiceAuth(r *http.Request) *FakeToken {
+	if r.Header.Get("Authorization") == "" {
+		return nil
+	}
+
+	encoded := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if encoded == "" {
+		return nil
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil
+	}
+
+	var token FakeToken
+	err = json.Unmarshal(decoded, &token)
+	if err != nil {
+		return nil
+	}
+
+	if !slices.Contains(token.Scopes, "idporten:dcr.altinn") {
+		return nil
+	}
+
+	return &token
+}
+
+func handleDumpPlease(w http.ResponseWriter, r *http.Request) {
+	state := r.Context().Value(StateKey).(*fakes.State)
+	assert.Assert(state != nil)
+
+	w.Header().Add("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	err := encoder.Encode(state.GetAll())
+	if err != nil {
+		w.WriteHeader(500)
+		log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+	}
+}
+
+func handleClients(w http.ResponseWriter, r *http.Request) {
+	state := r.Context().Value(StateKey).(*fakes.State)
+	assert.Assert(state != nil)
+
+	switch r.Method {
+	case GET:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		records := state.GetDb(r).Clients
+		clients := make([]*maskinporten.ClientResponse, len(records))
+		for i, record := range records {
+			clients[i] = record.Client
+		}
+
+		err := encoder.Encode(clients)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+		}
+	case POST:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var client maskinporten.AddClientRequest
+		err := decoder.Decode(&client)
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+		if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
+			w.WriteHeader(400)
+			log.Printf("clients cannot request idporten:dcr.altinn scope\n")
+			return
+		}
+
+		clientRecord, err := state.GetDb(r).Insert(&client, nil, "")
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+		w.WriteHeader(200)
+		w.Header().Add("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(clientRecord.Client)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+	default:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		w.WriteHeader(404)
+	}
+}
+
+func handleClientByID(w http.ResponseWriter, r *http.Request) {
+	state := r.Context().Value(StateKey).(*fakes.State)
+	assert.Assert(state != nil)
+
+	clientId := r.PathValue("clientId")
+
+	switch r.Method {
+	case GET:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		clientRecord := state.GetDb(r).Get(clientId)
+		if clientRecord == nil {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(clientRecord.Client)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+		}
+	case PUT:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var client maskinporten.UpdateClientRequest
+		err := decoder.Decode(&client)
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+		if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
+			w.WriteHeader(400)
+			log.Printf("clients cannot request idporten:dcr.altinn scope\n")
+			return
+		}
+
+		deleted := state.GetDb(r).Delete(clientId)
+		if !deleted {
+			w.WriteHeader(400)
+			log.Printf(
+				"couldn't read request: client does not exist clientId=%s\n",
+				clientId,
+			)
+			return
+		}
+		addReq := &maskinporten.AddClientRequest{
+			ClientId:                          client.ClientId,
+			ClientName:                        client.ClientName,
+			ClientOrgno:                       client.ClientOrgno,
+			SupplierOrgno:                     client.SupplierOrgno,
+			Description:                       client.Description,
+			Active:                            client.Active,
+			ApplicationType:                   client.ApplicationType,
+			IntegrationType:                   client.IntegrationType,
+			Scopes:                            client.Scopes,
+			GrantTypes:                        client.GrantTypes,
+			TokenEndpointAuthMethod:           client.TokenEndpointAuthMethod,
+			RefreshTokenLifetime:              client.RefreshTokenLifetime,
+			RefreshTokenUsage:                 client.RefreshTokenUsage,
+			AccessTokenLifetime:               client.AccessTokenLifetime,
+			AuthorizationLifetime:             client.AuthorizationLifetime,
+			LogoUri:                           client.LogoUri,
+			RedirectUris:                      client.RedirectUris,
+			PostLogoutRedirectUris:            client.PostLogoutRedirectUris,
+			FrontchannelLogoutSessionRequired: client.FrontchannelLogoutSessionRequired,
+			FrontchannelLogoutUri:             client.FrontchannelLogoutUri,
+			SsoDisabled:                       client.SsoDisabled,
+			CodeChallengeMethod:               client.CodeChallengeMethod,
+		}
+		updatedRecord, err := state.GetDb(r).Insert(addReq, nil, clientId)
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+		w.WriteHeader(200)
+		w.Header().Add("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(updatedRecord.Client)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+			return
+		}
+	case DELETE:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+	default:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		w.WriteHeader(404)
+	}
+}
+
+func handleClientJwks(w http.ResponseWriter, r *http.Request) {
+	state := r.Context().Value(StateKey).(*fakes.State)
+	assert.Assert(state != nil)
+
+	clientId := r.PathValue("clientId")
+
+	switch r.Method {
+	case GET:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+
+		clientRecord := state.GetDb(r).Get(clientId)
+		if clientRecord == nil {
+			w.WriteHeader(404)
+			return
+		}
+
+		encoder := json.NewEncoder(w)
+		err := encoder.Encode(clientRecord.Jwks)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
+		}
+
+	case POST:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+
+		decoder := json.NewDecoder(r.Body)
+		var jwks crypto.Jwks
+		err := decoder.Decode(&jwks)
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
+			return
+		}
+
+		err = state.GetDb(r).UpdateJwks(clientId, &jwks)
+		if err != nil {
+			w.WriteHeader(400)
+			log.Printf("couldn't update JWKS: %v\n", errors.Wrap(err, 0))
+			return
+		}
+		w.WriteHeader(201)
+
+	default:
+		if selfServiceAuth(r) == nil {
+			w.WriteHeader(401)
+			return
+		}
+		w.WriteHeader(404)
+	}
+}
+
 func runSelfServiceApi(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	name := "Self Service API"
 	addr := ":8051"
 
-	auth := func(r *http.Request) *FakeToken {
-		if r.Header.Get("Authorization") == "" {
-			return nil
-		}
-
-		encoded := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if encoded == "" {
-			return nil
-		}
-
-		decoded, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			return nil
-		}
-
-		var token FakeToken
-		err = json.Unmarshal(decoded, &token)
-		if err != nil {
-			return nil
-		}
-
-		if !slices.Contains(token.Scopes, "idporten:dcr.altinn") {
-			return nil
-		}
-
-		return &token
-	}
-
 	serve(ctx, name, addr, func(mux *http.ServeMux) {
-		mux.HandleFunc("/dump/please", func(w http.ResponseWriter, r *http.Request) {
-			state := r.Context().Value(StateKey).(*fakes.State)
-			assert.Assert(state != nil)
-
-			w.Header().Add("Content-Type", "application/json")
-			encoder := json.NewEncoder(w)
-			err := encoder.Encode(state.GetAll())
-			if err != nil {
-				w.WriteHeader(500)
-				log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-			}
-		})
-
-		mux.HandleFunc("/api/v1/altinn/admin/clients", func(w http.ResponseWriter, r *http.Request) {
-			state := r.Context().Value(StateKey).(*fakes.State)
-			assert.Assert(state != nil)
-
-			switch r.Method {
-			case GET:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				w.Header().Add("Content-Type", "application/json")
-				encoder := json.NewEncoder(w)
-				records := state.GetDb(r).Clients
-				clients := make([]*maskinporten.ClientResponse, len(records))
-				for i, record := range records {
-					clients[i] = record.Client
-				}
-
-				err := encoder.Encode(clients)
-				if err != nil {
-					w.WriteHeader(500)
-					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-				}
-			case POST:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				decoder := json.NewDecoder(r.Body)
-				var client maskinporten.AddClientRequest
-				err := decoder.Decode(&client)
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-				if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
-					w.WriteHeader(400)
-					log.Printf("clients cannot request idporten:dcr.altinn scope\n")
-					return
-				}
-
-				clientRecord, err := state.GetDb(r).Insert(&client, nil, "")
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-				w.WriteHeader(200)
-				w.Header().Add("Content-Type", "application/json")
-				encoder := json.NewEncoder(w)
-				err = encoder.Encode(clientRecord.Client)
-				if err != nil {
-					w.WriteHeader(500)
-					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-			default:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				w.WriteHeader(404)
-			}
-		})
-
-		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}", func(w http.ResponseWriter, r *http.Request) {
-			state := r.Context().Value(StateKey).(*fakes.State)
-			assert.Assert(state != nil)
-
-			clientId := r.PathValue("clientId")
-
-			switch r.Method {
-			case GET:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				clientRecord := state.GetDb(r).Get(clientId)
-				if clientRecord == nil {
-					w.WriteHeader(404)
-					return
-				}
-				w.Header().Add("Content-Type", "application/json")
-				encoder := json.NewEncoder(w)
-				err := encoder.Encode(clientRecord.Client)
-				if err != nil {
-					w.WriteHeader(500)
-					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-				}
-			case PUT:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				decoder := json.NewDecoder(r.Body)
-				var client maskinporten.UpdateClientRequest
-				err := decoder.Decode(&client)
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-				if slices.Contains(client.Scopes, "idporten:dcr.altinn") {
-					w.WriteHeader(400)
-					log.Printf("clients cannot request idporten:dcr.altinn scope\n")
-					return
-				}
-
-				deleted := state.GetDb(r).Delete(clientId)
-				if !deleted {
-					w.WriteHeader(400)
-					log.Printf(
-						"couldn't read request: client does not exist clientId=%s\n",
-						clientId,
-					)
-					return
-				}
-				// Convert UpdateClientRequest to AddClientRequest for the insert operation
-				addReq := &maskinporten.AddClientRequest{
-					ClientId:                          client.ClientId,
-					ClientName:                        client.ClientName,
-					ClientOrgno:                       client.ClientOrgno,
-					SupplierOrgno:                     client.SupplierOrgno,
-					Description:                       client.Description,
-					Active:                            client.Active,
-					ApplicationType:                   client.ApplicationType,
-					IntegrationType:                   client.IntegrationType,
-					Scopes:                            client.Scopes,
-					GrantTypes:                        client.GrantTypes,
-					TokenEndpointAuthMethod:           client.TokenEndpointAuthMethod,
-					RefreshTokenLifetime:              client.RefreshTokenLifetime,
-					RefreshTokenUsage:                 client.RefreshTokenUsage,
-					AccessTokenLifetime:               client.AccessTokenLifetime,
-					AuthorizationLifetime:             client.AuthorizationLifetime,
-					LogoUri:                           client.LogoUri,
-					RedirectUris:                      client.RedirectUris,
-					PostLogoutRedirectUris:            client.PostLogoutRedirectUris,
-					FrontchannelLogoutSessionRequired: client.FrontchannelLogoutSessionRequired,
-					FrontchannelLogoutUri:             client.FrontchannelLogoutUri,
-					SsoDisabled:                       client.SsoDisabled,
-					CodeChallengeMethod:               client.CodeChallengeMethod,
-				}
-				updatedRecord, err := state.GetDb(r).Insert(addReq, nil, clientId)
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't insert client: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-				w.WriteHeader(200)
-				w.Header().Add("Content-Type", "application/json")
-				encoder := json.NewEncoder(w)
-				err = encoder.Encode(updatedRecord.Client)
-				if err != nil {
-					w.WriteHeader(500)
-					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-					return
-				}
-			case DELETE:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-			default:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				w.WriteHeader(404)
-			}
-		})
-
-		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}/jwks", func(w http.ResponseWriter, r *http.Request) {
-			state := r.Context().Value(StateKey).(*fakes.State)
-			assert.Assert(state != nil)
-
-			clientId := r.PathValue("clientId")
-
-			switch r.Method {
-			case GET:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-				w.Header().Add("Content-Type", "application/json")
-
-				clientRecord := state.GetDb(r).Get(clientId)
-				if clientRecord == nil {
-					w.WriteHeader(404)
-					return
-				}
-
-				encoder := json.NewEncoder(w)
-				err := encoder.Encode(clientRecord.Jwks)
-				if err != nil {
-					w.WriteHeader(500)
-					log.Printf("couldn't write response: %v\n", errors.Wrap(err, 0))
-				}
-
-			case POST:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-
-				decoder := json.NewDecoder(r.Body)
-				var jwks crypto.Jwks
-				err := decoder.Decode(&jwks)
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't read request: %v\n", errors.Wrap(err, 0))
-					return
-				}
-
-				err = state.GetDb(r).UpdateJwks(clientId, &jwks)
-				if err != nil {
-					w.WriteHeader(400)
-					log.Printf("couldn't update JWKS: %v\n", errors.Wrap(err, 0))
-					return
-				}
-				w.WriteHeader(201)
-
-			default:
-				if auth(r) == nil {
-					w.WriteHeader(401)
-					return
-				}
-				w.WriteHeader(404)
-			}
-		})
+		mux.HandleFunc("/dump/please", handleDumpPlease)
+		mux.HandleFunc("/api/v1/altinn/admin/clients", handleClients)
+		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}", handleClientByID)
+		mux.HandleFunc("/api/v1/altinn/admin/clients/{clientId}/jwks", handleClientJwks)
 	})
 }
 
