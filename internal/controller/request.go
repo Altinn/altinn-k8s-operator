@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -37,6 +38,7 @@ type maskinportenClientRequest struct {
 	AppId          string
 	AppLabel       string
 	Kind           requestKind
+	Instance       *resourcesv1alpha1.MaskinportenClient
 }
 
 func (r *MaskinportenClientReconciler) mapRequest(
@@ -59,6 +61,6 @@ func (r *MaskinportenClientReconciler) mapRequest(
 		Name:           req.Name,
 		Namespace:      req.Namespace,
 		AppId:          appId,
-		AppLabel:       fmt.Sprintf("%s-%s-deployment", operatorContext.ServiceOwner, appId),
+		AppLabel:       fmt.Sprintf("%s-%s-deployment", operatorContext.ServiceOwnerName, appId),
 	}, nil
 }

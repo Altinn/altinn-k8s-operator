@@ -4,8 +4,10 @@ Developer documentation for Altinn 3 Kubernetes operators.
 
 Here are some important resources:
 
-  * [Team Apps Github board](https://github.com/orgs/Altinn/projects/39/views/2)
-  * [Altinn Studio docs](https://docs.altinn.studio/)
+* [Team Apps Github board](https://github.com/orgs/Altinn/projects/39/views/2)
+* [Altinn Studio docs](https://docs.altinn.studio/)
+* Self service API docs: https://docs.digdir.no/docs/idporten/oidc/oidc_api_admin.html
+* Self service API dev Swagger UI: https://api.samarbeid.digdir.dev/swagger-ui/index.html?urls.primaryName=External%20OIDC
 
 ## Reporting Issues
 
@@ -23,6 +25,23 @@ Feel free to query existing issues before creating a new one.
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
+
+#### Run tests
+
+```sh
+make # build
+
+make test # runs local tests (doesn't need k8s etc)
+
+make test-e2e # runs e2e tests, requires kind
+```
+
+We use [go-snaps](https://github.com/gkampitakis/go-snaps) for snapshot tests.
+[Update snapshots](https://github.com/gkampitakis/go-snaps?tab=readme-ov-file#update-snapshots) by running
+
+```sh
+UPDATE_SNAPS=true make test
+```
 
 #### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
@@ -105,6 +124,12 @@ kubectl apply -f https://raw.githubusercontent.com/<org>/altinn-k8s-operator/<ta
 
 // TODO: doc
 
+### JSON schema -> Go structs
+
+The Swagger UI is at: https://api.samarbeid.digdir.dev/swagger-ui/index.html#/
+OpenAPI spec at: https://api.samarbeid.digdir.dev/v3/api-docs/altinn-admin
+
+Download to `schemas/spec.json`, tell AI to write the models, update the client and fakes.
 
 ### Upgrading
 

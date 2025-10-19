@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"time"
@@ -8,37 +9,30 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	resourcesv1alpha1 "github.com/altinn/altinn-k8s-operator/api/v1alpha1"
 	"github.com/altinn/altinn-k8s-operator/test/utils"
 )
 
 const namespace = "altinn-k8s-operator-system"
 
-// TODO: create e2e environment matching app clusters
-
 var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
-		By("installing prometheus operator")
-		Expect(utils.InstallPrometheusOperator()).To(Succeed())
+		By("installing kind cluster")
+		Expect(utils.StartKindCluster()).To(Succeed())
 
-		By("installing the cert-manager")
-		Expect(utils.InstallCertManager()).To(Succeed())
+		By("installing test app")
+		Expect(utils.StartTestApp()).To(Succeed())
 
 		By("creating manager namespace")
 		cmd := exec.Command("kubectl", "create", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		_, err := utils.Run(cmd, "")
+		Expect(err).To(Succeed())
 	})
 
-	AfterAll(func() {
-		By("uninstalling the Prometheus manager bundle")
-		utils.UninstallPrometheusOperator()
-
-		By("uninstalling the cert-manager bundle")
-		utils.UninstallCertManager()
-
-		By("removing manager namespace")
-		cmd := exec.Command("kubectl", "delete", "ns", namespace)
-		_, _ = utils.Run(cmd)
-	})
+	// AfterAll(func() {
+	// 	By("uninstalling kind cluster")
+	// 	Expect(utils.Destroy()).To(Succeed())
+	// })
 
 	Context("Operator", func() {
 		It("should run successfully", func() {
@@ -50,21 +44,16 @@ var _ = Describe("controller", Ordered, func() {
 
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
-			_, err = utils.Run(cmd)
+			_, err = utils.Run(cmd, "")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("loading the the manager(Operator) image on Kind")
 			err = utils.LoadImageToKindClusterWithName(projectimage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("installing CRDs")
-			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
 			By("deploying the controller-manager")
 			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectimage))
-			_, err = utils.Run(cmd)
+			_, err = utils.Run(cmd, "")
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("validating that the controller-manager pod is running as expected")
@@ -80,7 +69,7 @@ var _ = Describe("controller", Ordered, func() {
 					"-n", namespace,
 				)
 
-				podOutput, err := utils.Run(cmd)
+				podOutput, err := utils.Run(cmd, "")
 				ExpectWithOffset(2, err).NotTo(HaveOccurred())
 				podNames := utils.GetNonEmptyLines(string(podOutput))
 				if len(podNames) != 1 {
@@ -94,7 +83,7 @@ var _ = Describe("controller", Ordered, func() {
 					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
 					"-n", namespace,
 				)
-				status, err := utils.Run(cmd)
+				status, err := utils.Run(cmd, "")
 				ExpectWithOffset(2, err).NotTo(HaveOccurred())
 				if string(status) != "Running" {
 					return fmt.Errorf("controller pod in %s status", status)
@@ -102,7 +91,44 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+		})
 
+		It("should respond to MaskinportenClient", func() {
+
+			By("creating MaskinportenClient resource")
+			Expect(utils.ApplyMaskinportenClient()).To(Succeed())
+
+			By("constructing k8s client")
+			k8sClient, err := utils.GetK8sClient()
+			Expect(err).To(Succeed())
+
+			By("validating that the corresponding status is updated after reconcile")
+			verifyStatusUpdated := func() error {
+				maskinportenClient := &resourcesv1alpha1.MaskinportenClient{}
+				err := k8sClient.Get().
+					Resource("maskinportenclients").
+					Namespace("default").
+					Name("local-testapp").
+					Do(context.Background()).
+					Into(maskinportenClient)
+
+				if err != nil {
+					return err
+				}
+
+				state := maskinportenClient.Status.State
+				if state != "reconciled" {
+					return fmt.Errorf("MaskinportenClient resource in %s status", state)
+				}
+
+				return nil
+			}
+			EventuallyWithOffset(
+				1,
+				verifyStatusUpdated,
+			).WithTimeout(time.Second * 5).
+				WithPolling(time.Second).
+				Should(Succeed())
 		})
 	})
 })

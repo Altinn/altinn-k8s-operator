@@ -5,4 +5,4 @@ metadata:
     app: local-testapp-deployment
   name: local-testapp
 spec:
-  scopes: ['test-scope']
+  scopes: ['altinn:resourceregistry/resource.read']

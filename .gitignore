@@ -6,6 +6,7 @@
 *.dylib
 bin/*
 Dockerfile.cross
+.gocache/
 
 # Test binary, built with `go test -c`
 *.test
@@ -29,3 +30,9 @@ go.work
 test/**/obj/
 test/**/bin/
 test/**/charts/
+
+*.env
+!local.env.sample
+
+# Downloaded charts
+test/app/altinn-studio-charts/

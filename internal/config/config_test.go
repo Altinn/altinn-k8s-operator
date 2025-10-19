@@ -29,7 +29,7 @@ func TestConfigMissingValuesFail(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
-	cfg, err := GetConfig(operatorContext, file.Name())
+	cfg, err := GetConfig(operatorContext, ConfigSourceDefault, file.Name())
 	Expect(cfg).To(BeNil())
 	Expect(err).To(HaveOccurred())
 	_, ok := err.(validator.ValidationErrors)
@@ -42,10 +42,10 @@ func TestConfigTestEnvLoadsOk(t *testing.T) {
 	RegisterTestingT(t)
 
 	operatorContext := operatorcontext.DiscoverOrDie(context.Background())
-	cfg, err := GetConfig(operatorContext, "")
+	cfg, err := GetConfig(operatorContext, ConfigSourceDefault, "")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-	Expect(cfg.MaskinportenApi.ClientId).To(Equal("64d8055d-bf0c-4ee2-979e-d2bbe996a9f5"))
-	Expect(cfg.MaskinportenApi.Url).To(Equal("https://maskinporten.dev"))
+	Expect(cfg.MaskinportenApi.ClientId).To(Equal("altinn_apps_supplier_client"))
+	Expect(cfg.MaskinportenApi.AuthorityUrl).To(Equal("http://localhost:8050"))
 	Expect(cfg.MaskinportenApi.Jwk).NotTo(BeNil())
 }
